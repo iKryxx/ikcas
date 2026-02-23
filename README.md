@@ -47,6 +47,7 @@ Run:
   - `:mode exact`
   - `:mode approx`
   - `:quit` or `:q`
+  - etc.
 
 ## Notes
 

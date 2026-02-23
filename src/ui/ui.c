@@ -3,6 +3,8 @@
 //
 
 #include "ui/ui.h"
+
+#include <inttypes.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -110,6 +112,11 @@ static cmd_status_t ui__builtin_quit(cmd_ctx_t* ctx) {
 }
 
 static cmd_status_t ui__builtin_mode(cmd_ctx_t* ctx) {
+    if (ctx->argc == 1) {
+        ui_print(ctx->ui, "Mode: %s", core_get_eval_mode() == EVAL_MODE_APPROX ? "approx" : "exact");
+        return CMD_OK;
+    }
+
     if (ctx->argc != 2) {
         ui_print(ctx->ui, "Usage: :mode {exact|approx}");
         return CMD_ERROR;
@@ -130,12 +137,38 @@ static cmd_status_t ui__builtin_mode(cmd_ctx_t* ctx) {
     return CMD_ERROR;
 }
 
+static cmd_status_t ui__builtin_precision(cmd_ctx_t* ctx) {
+    if (ctx->argc == 1) {
+        if (core_get_precision() == -1) ui_print(ctx->ui, "Precision: %d (10)", core_get_precision());
+        else ui_print(ctx->ui, "Precision: %d", core_get_precision());
+        return CMD_OK;
+    }
+    if (ctx->argc != 2) {
+        ui_print(ctx->ui, "Usage: :precision <number>");
+        return CMD_ERROR;
+    }
+    if (cmd_is_int(ctx->argv[1])) {
+        long conv = strtoimax(ctx->argv[1], nullptr, 10);
+        if (conv > 16 || conv < -1) {
+            ui_print(ctx->ui, "Please enter a number between -1 and 16.");
+            return CMD_ERROR;
+        }
+
+        core_set_precision((int)conv);
+        ui_print(ctx->ui, "Precision: %d", core_get_precision());
+        return CMD_OK;
+    }
+    ui_print(ctx->ui, "argument 1 has to be a numeric value.");
+    return CMD_ERROR;
+}
+
 static void ui__register_builtins(cmd_registry_t* r, struct ui* ui) {
     (void)ui;
     cmd_register(r, "help", ui__builtin_help, r, "List commands or :help <cmd>", 0);
     cmd_register(r, "mode", ui__builtin_mode, r, "Set eval mode: :mode {exact|approx}", 0);
     cmd_register(r, "quit", ui__builtin_quit, r, "Quit ikcas", 0);
     cmd_register(r, "q", ui__builtin_quit, r, "Quit ikcas", 0);
+    cmd_register(r, "precision", ui__builtin_precision, r, "Set precision for decimal numbers: :precision <number", 0);
 }
 
 bool ui_init(ui_t *ui) {

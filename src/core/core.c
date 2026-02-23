@@ -20,7 +20,8 @@ static env_t    g_env;
 static arena_t  g_store;
 static eval_mode_t g_eval_mode = EVAL_MODE_EXACT;
 
-bool print_ast = false;
+bool c_print_ast = false;
+int c_precision = -1;
 
 static const node_t *store_copy_node(const node_t *n);
 
@@ -139,7 +140,7 @@ core_result_t core_eval(const char *expr) {
     sb_t sb;
     sb_init(&sb, (char*)out.text, (int)sizeof(out.text));
 
-    if (print_ast)
+    if (c_print_ast)
         node_print(&sb, statement.expr, 0);
     else if (statement.kind == STMT_EXPR) {
         eval_result_t res = (g_eval_mode == EVAL_MODE_APPROX)
@@ -168,4 +169,12 @@ void core_set_eval_mode(eval_mode_t mode) {
 
 eval_mode_t core_get_eval_mode(void) {
     return g_eval_mode;
+}
+
+void core_set_precision(const int precision) {
+    c_precision = precision;
+}
+
+int core_get_precision(void) {
+    return c_precision;
 }

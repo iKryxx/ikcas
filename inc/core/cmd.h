@@ -42,4 +42,6 @@ bool cmd_try_exec(cmd_registry_t* r, struct ui* ui, const char* input);
 
 int cmd_count(const cmd_registry_t* r);
 const cmd_def_t* cmd_at(const cmd_registry_t* r, int i);
+
+bool cmd_is_int(const char* str);
 #endif //IKCAS_CMD_H

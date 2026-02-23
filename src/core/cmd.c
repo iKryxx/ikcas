@@ -87,6 +87,23 @@ const cmd_def_t * cmd_at(const cmd_registry_t *r, int i) {
     return &r->v[i];
 }
 
+bool cmd_is_int(const char *str) {
+    char* sv = (char*)str;
+    bool is_first = true;
+    while (sv && *sv) {
+        if (is_first) {
+            is_first = false;
+            if (*sv == '-') {
+                sv++;
+                continue;
+            }
+        }
+        if (*sv >= '0' && *sv++ <= '9') continue;
+        return false;
+    }
+    return true;
+}
+
 static void skip_ws(const char **s) {
     while (**s && isspace((unsigned char)**s)) (*s)++;
 }

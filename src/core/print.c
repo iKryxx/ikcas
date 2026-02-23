@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "core/builtins.h"
+#include "core/core.h"
 
 void sb_init(sb_t *sb, char *buf, int cap) {
     sb->buf = buf;
@@ -62,13 +63,14 @@ void node_print(sb_t *sb, node_t *n, int parent_prec) {
     paren_if(sb, need_paren);
 
     char tmp[128];
+    int precision = c_precision == -1 ? 10 : c_precision;
     switch (n->kind) {
         case NODE_RAT:
             rat_to_str(n->rat, tmp, sizeof(tmp));
             sb_puts(sb, tmp);
             break;
         case NODE_REAL:
-            snprintf(tmp, sizeof(tmp), "%.17g", n->real);
+            snprintf(tmp, sizeof(tmp), "%.*g", precision, n->real);
             sb_puts(sb, tmp);
             break;
         case NODE_SYMBOL:
