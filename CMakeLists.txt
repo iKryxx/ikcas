@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 4.0)
+cmake_minimum_required(VERSION 3.31)
 project(ikcas VERSION 0.1.2 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 23)
@@ -24,11 +24,16 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 )
 
 target_compile_options(${PROJECT_NAME} PRIVATE
-    -Wall -Wextra -Wpedantic -Werror
+    -Wall -Wextra -Wpedantic -Werror     
+)
+
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+    _POSIX_C_SOURCE=200809L
+    _XOPEN_SOURCE=700
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
     ${NOTCURSES_LIBRARIES}
-        m
+    m
 )
 
