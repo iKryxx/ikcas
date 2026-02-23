@@ -6,6 +6,8 @@
 
 #include <string.h>
 
+#include "core/builtins.h"
+
 void sb_init(sb_t *sb, char *buf, int cap) {
     sb->buf = buf;
     sb->cap = cap;

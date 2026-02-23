@@ -6,6 +6,8 @@
 
 #include <string.h>
 
+#include "core/builtins.h"
+
 static node_t * node_alloc(arena_t *a) {
     return arena_alloc(a, sizeof(node_t));
 }

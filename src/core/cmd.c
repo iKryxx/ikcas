@@ -91,10 +91,6 @@ static void skip_ws(const char **s) {
     while (**s && isspace((unsigned char)**s)) (*s)++;
 }
 
-static bool is_delim(char c) {
-    return c == '\0' || isspace((unsigned char)c);
-}
-
 static int tokenize(const char *s, const char **argv, int max_argv, char *tmp, int tmp_len) {
     size_t n = strlen(s);
     if ((int)n >= tmp_len) n = tmp_len - 1;

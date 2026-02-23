@@ -287,7 +287,9 @@ stmt_t parse_stmnt(arena_t *a, const char *input, const char **err) {
             int arity = 0;
             const char** params = parse_param_list(&p, &arity);
             if (!params) {
-                if (err) *err = p.err;
+                if (err) {
+                    strcpy(*(char**)err, p.err);
+                }
                 return (stmt_t){ 0 };
             }
 
@@ -295,7 +297,9 @@ stmt_t parse_stmnt(arena_t *a, const char *input, const char **err) {
                 tok_take(&p);
                 node_t* body = expr(&p, 0);
                 if (!body) {
-                    if (err) *err = p.err;
+                    if (err) {
+                        strcpy(*(char**)err, p.err);
+                    }
                     return (stmt_t){ 0 };
                 }
                 if (lex_peek(&p.lx).kind != TOK_EOF) {
@@ -319,7 +323,9 @@ stmt_t parse_stmnt(arena_t *a, const char *input, const char **err) {
             tok_take(&p);
             node_t* rhs = expr(&p, 0);
             if (!rhs) {
-                if (err) *err = p.err;
+                if (err) {
+                    strcpy(*(char**)err, p.err);
+                }
                 return (stmt_t){ 0 };
             }
             if (lex_peek(&p.lx).kind != TOK_EOF) {
@@ -345,7 +351,9 @@ stmt_t parse_stmnt(arena_t *a, const char *input, const char **err) {
 
     node_t* r = expr(&p, 0);
     if (!r) {
-        if (err) *err = p.err;
+        if (err) {
+            strcpy(*(char**)err, p.err);
+        }
         return (stmt_t){ .name = nullptr, .expr = nullptr};
     }
 

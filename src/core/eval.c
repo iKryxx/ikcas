@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "core/builtins.h"
 #include "logging/log.h"
 
 static eval_result_t eval_impl(arena_t* a, const node_t* n, lookup_fn_t lookup, void* lctx);

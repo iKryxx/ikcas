@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "core/builtins.h"
 #include "core/env.h"
 #include "core/eval.h"
 #include "core/node.h"
@@ -22,54 +23,6 @@ static eval_mode_t g_eval_mode = EVAL_MODE_EXACT;
 bool print_ast = false;
 
 static const node_t *store_copy_node(const node_t *n);
-
-static node_t * fn_abs_cb(arena_t* a, node_t** args, int argc, lookup_fn_t lookup, void* lctx, const char** err) {
-    (void) lookup;
-    (void) lctx;
-    if (argc != 1) {
-        if (err) *err = "abs takes 1 argument";
-        return nullptr;
-    }
-
-    node_t* x = args[0];
-
-    if (x->kind == NODE_RAT) {
-        rat_t r = rat_norm(x->rat);
-        if (r.num < 0) r.num = -r.num;
-        return node_rat(a, r);
-    }
-    if (x->kind == NODE_REAL) {
-        return node_real(a, x->real < 0.0 ? -x->real : x->real);
-    }
-    if (x->kind == NODE_NEG) {
-        node_t* inner = x->unary.a;
-
-        if (inner->kind == NODE_RAT) {
-            rat_t r = rat_norm(inner->rat);
-            if (r.num < 0) r.num = -r.num;
-            return node_rat(a, r);
-        }
-        if (inner->kind == NODE_REAL) {
-            return node_real(a, inner->real < 0.0 ? -inner->real : inner->real);
-        }
-
-        node_t** one = arena_alloc(a, sizeof(node_t*));
-        if (!one) {
-            if (err) *err = "out of memory";
-            return nullptr;
-        }
-        one[0] = inner;
-        return node_call(a, arena_strdup(a, "abs", -1), one, 1);
-    }
-
-    return nullptr;
-}
-static const builtin_fn_t FN_ABS = {
-    "abs",
-    1,
-    1,
-    fn_abs_cb
-};
 
 void core_init(void) {
     env_init(&g_env);
@@ -164,7 +117,7 @@ core_result_t core_eval(const char *expr) {
     const char **out_text = (const char**)out.text;
     stmt_t statement = parse_stmnt(&a, expr, out_text);
     if (!statement.name && !statement.expr) {
-        memccpy(out.text, *out_text, '\0', sizeof(out.text));
+        memccpy((void*)out.text, *out_text, '\0', sizeof(out.text));
         out.ok = false;
         arena_destroy(&a);
         return out;
@@ -183,10 +136,8 @@ core_result_t core_eval(const char *expr) {
         }
     }
 
-
-
     sb_t sb;
-    sb_init(&sb, out.text, (int)sizeof(out.text));
+    sb_init(&sb, (char*)out.text, (int)sizeof(out.text));
 
     if (print_ast)
         node_print(&sb, statement.expr, 0);
@@ -199,7 +150,7 @@ core_result_t core_eval(const char *expr) {
 
         if (!res.ok) {
             out.kind = CORE_ERROR;
-            snprintf(out.text, sizeof(out.text), "%s", res.err);
+            snprintf((char*)out.text, sizeof(out.text), "%s", res.err);
             arena_destroy(&a);
             return out;
         }
