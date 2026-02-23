@@ -4,16 +4,18 @@
 
 #include "core/parse.h"
 
+#include <limits.h>
 #include <string.h>
 
 #include "core/node.h"
 
 static bool tok_is(parser_t *p, tok_kind_t k) {return lex_peek(&p->lx).kind == k;}
 static tok_t tok_take(parser_t *p) { return lex_next(&p->lx); }
-static void parser_set_errormsg(parser_t *p, const char *msg) { memccpy(p->err, msg, '\0', sizeof(p->err)); }
+static void parser_set_errormsg(parser_t *p, const char *msg) { memccpy(p->err, msg, '\0', sizeof(p->err));}
 static node_t** parse_arg_list(parser_t *p, int* out_argc);
 static const char** parse_param_list(parser_t *p, int* out_arity);
 static bool looks_like_funcdef(const char* input);
+static bool parse_decimal_rat(tok_t t, rat_t* out);
 
 static bool tok_expect(parser_t *p, tok_kind_t k, const char *msg) {
     if (tok_is(p,k)) { tok_take(p); return true;}
@@ -42,6 +44,14 @@ static node_t* nud(parser_t *p) {
     tok_t t = tok_take(p);
 
     if (t.kind == TOK_NUM) {
+        if (t.is_decimal) {
+            rat_t r;
+            if (!parse_decimal_rat(t, &r)) {
+                parser_set_errormsg(p, "invalid decimal literal");
+                return nullptr;
+            }
+            return node_rat(p->arena, r);
+        }
         return node_rat(p->arena, rat_from_i64(t.i64));
     }
 
@@ -76,6 +86,37 @@ static node_t* nud(parser_t *p) {
     }
     parser_set_errormsg(p, "unexpected token");
     return nullptr;
+}
+
+static bool parse_decimal_rat(tok_t t, rat_t* out) {
+    if (!out || !t.beg || t.len <= 0) return false;
+
+    int64_t num = 0;
+    int64_t den = 1;
+    bool past_dot = false;
+
+    for (int i = 0; i < t.len; i++) {
+        char c = t.beg[i];
+        if (c == '.') {
+            if (past_dot) return false;
+            past_dot = true;
+            continue;
+        }
+        if (c < '0' || c > '9') return false;
+
+        int d = c - '0';
+        if (num > (INT64_MAX - d) / 10) return false;
+        num = num * 10 + d;
+
+        if (past_dot) {
+            if (den > INT64_MAX / 10) return false;
+            den *= 10;
+        }
+    }
+
+    if (!past_dot) return false;
+    *out = rat_norm((rat_t){ num, den });
+    return true;
 }
 
 static node_t* led(parser_t *p, node_t* left, tok_t op) {
@@ -352,7 +393,7 @@ stmt_t parse_stmnt(arena_t *a, const char *input, const char **err) {
     node_t* r = expr(&p, 0);
     if (!r) {
         if (err) {
-            strcpy(*(char**)err, p.err);
+            strcpy((char*)err, p.err);
         }
         return (stmt_t){ .name = nullptr, .expr = nullptr};
     }

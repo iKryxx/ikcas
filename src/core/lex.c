@@ -25,19 +25,32 @@ static tok_t lex_real(lex_t* l) {
 
     const char* beg = s + l->i;
 
-    // number: integer only for now
     if (isdigit(c)) {
         int64_t v = 0;
+        bool overflow = false;
         while (isdigit((unsigned char)s[l->i])) {
             int d = s[l->i] - '0';
-            v *= 10;
-            v += d;
+            if (!overflow) {
+                int64_t nv = v * 10 + d;
+                if (nv < v) overflow = true;
+                else v = nv;
+            }
             l->i++;
+        }
+
+        bool is_decimal = false;
+        if (s[l->i] == '.') {
+            is_decimal = true;
+            l->i++; // consume '.'
+            while (isdigit((unsigned char)s[l->i])) {
+                l->i++;
+            }
         }
 
         tok_t t; memset(&t, 0, sizeof(t));
         t = make_tok(TOK_NUM, beg, (int)((s+l->i) - beg));
-        t.i64 = v;
+        t.i64 = is_decimal ? 0 : v;
+        t.is_decimal = is_decimal;
         return t;
     }
 
@@ -102,4 +115,3 @@ tok_t lex_next(lex_t *l) {
     }
     return t;
 }
-

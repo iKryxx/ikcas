@@ -108,17 +108,17 @@ static node_t* store_copy_userfunc(const char* name, const char** params_parse_a
 }
 
 core_result_t core_eval(const char *expr) {
-    core_result_t out;
-    memset(&out, 0, sizeof(out));
+    core_result_t out = {0};
 
     arena_t a;
     arena_init(&a);
 
-    const char **out_text = (const char**)out.text;
-    stmt_t statement = parse_stmnt(&a, expr, out_text);
+    const char (*out_text)[128] = &out.text;
+    stmt_t statement = parse_stmnt(&a, expr, (const char**)out_text);
     if (!statement.name && !statement.expr) {
         memccpy((void*)out.text, *out_text, '\0', sizeof(out.text));
         out.ok = false;
+        out.kind = CORE_ERROR;
         arena_destroy(&a);
         return out;
     }

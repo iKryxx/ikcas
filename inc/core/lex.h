@@ -29,6 +29,7 @@ typedef struct {
     int len;
 
     int64_t i64;
+    bool is_decimal;
 } tok_t;
 
 typedef struct {
