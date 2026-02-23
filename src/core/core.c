@@ -31,16 +31,20 @@ void core_init(void) {
 
     node_t* pi = node_symbol(&g_store, arena_strdup(&g_store, "pi", -1), -1);
     node_t* e = node_symbol(&g_store, arena_strdup(&g_store, "e", -1), -1);
-    env_set(&g_env, "pi", pi);
-    env_set(&g_env, "e", e);
+    env_set(&g_env, "pi", pi, true);
+    env_set(&g_env, "e", e, true);
 
     node_t* abs = node_callable_builtin(&g_store, &FN_ABS);
-    env_set(&g_env, "abs", abs);
+    env_set(&g_env, "abs", abs, true);
 }
 
 void core_shutdown(void) {
     env_free(&g_env);
     arena_destroy(&g_store);
+}
+
+env_t * core_get_g_env(void) {
+    return &g_env;
 }
 
 static const node_t * store_copy_node_rec(const node_t* n) {
@@ -103,7 +107,7 @@ static node_t* store_copy_userfunc(const char* name, const char** params_parse_a
     node_t* callable = node_callable_user(&g_store, uf);
     if (!callable) return nullptr;
 
-    if (!env_set(&g_env, name, callable)) return nullptr;
+    if (!env_set(&g_env, name, callable, false)) return nullptr;
 
     return callable;
 }
@@ -127,7 +131,7 @@ core_result_t core_eval(const char *expr) {
     if (statement.kind == STMT_ASSIGN) {
         out.kind = CORE_ASSIGNMENT;
         if (statement.name) {
-            env_set(&g_env, statement.name, (node_t*)store_copy_node(statement.expr));
+            env_set(&g_env, statement.name, (node_t*)store_copy_node(statement.expr), false);
         }
     }
     else if (statement.kind == STMT_FUNCDEF) {

@@ -10,6 +10,7 @@
 #include <string.h>
 
 #include "core/core.h"
+#include "core/env.h"
 
 static bool detect_bitmap(const struct notcurses* nc) {
     return notcurses_canpixel(nc);
@@ -162,13 +163,30 @@ static cmd_status_t ui__builtin_precision(cmd_ctx_t* ctx) {
     return CMD_ERROR;
 }
 
+static cmd_status_t ui__builtin_undef(cmd_ctx_t* ctx) {
+    if (ctx->argc < 2) {
+        ui_print(ctx->ui, "Usage: :undef <symbol1> [symbol2...]");
+        return CMD_ERROR;
+    }
+    for (int i = 1; i < ctx->argc; i++) {
+        if (!env_remove(core_get_g_env(), ctx->argv[i])) {
+            ui_print(ctx->ui, "Symbol '%s' does not exist or cannot be removed", ctx->argv[i]);
+        }
+        else {
+            ui_print(ctx->ui, "Symbol '%s' removed", ctx->argv[i]);
+        }
+    }
+    return CMD_OK;
+}
+
 static void ui__register_builtins(cmd_registry_t* r, struct ui* ui) {
     (void)ui;
-    cmd_register(r, "help", ui__builtin_help, r, "List commands or :help <cmd>", 0);
-    cmd_register(r, "mode", ui__builtin_mode, r, "Set eval mode: :mode {exact|approx}", 0);
-    cmd_register(r, "quit", ui__builtin_quit, r, "Quit ikcas", 0);
-    cmd_register(r, "q", ui__builtin_quit, r, "Quit ikcas", 0);
-    cmd_register(r, "precision", ui__builtin_precision, r, "Set precision for decimal numbers: :precision <number", 0);
+    cmd_register(r, "help",         ui__builtin_help, r,        "List commands or :help <cmd>", 0);
+    cmd_register(r, "mode",         ui__builtin_mode, r,        "Set eval mode: :mode {exact|approx}", 0);
+    cmd_register(r, "quit",         ui__builtin_quit, r,        "Quit ikcas", 0);
+    cmd_register(r, "q",            ui__builtin_quit, r,        "Quit ikcas", 0);
+    cmd_register(r, "precision",    ui__builtin_precision, r,   "Set precision for decimal numbers: :precision <number", 0);
+    cmd_register(r, "undef",        ui__builtin_undef, r,       "Undefine a symbol: :undef <symbol1> [symbol2...]", 0);
 }
 
 bool ui_init(ui_t *ui) {

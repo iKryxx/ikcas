@@ -50,10 +50,34 @@ bool env_get(const env_t *env, const char *name, node_t **out) {
     return false;
 }
 
-bool env_set(env_t *env, const char *name, node_t *value) {
+bool env_remove(env_t *env, const char *name) {
+    if (!env || !name) return false;
+
+    int index = 0;
+    for (; index < env->len; ++index) {
+        if (strcmp(env->entries[index].name, name) == 0) {
+            if (env->entries[index].is_constant) {
+                return false;
+            }
+            break;
+        }
+    }
+    if (index == env->len) return false;
+
+    free((void*)env->entries[index].name);
+
+    for (; index < env->len - 1; ++index) {
+        env->entries[index] = env->entries[index + 1];
+    }
+    env->len--;
+    return true;
+}
+
+bool env_set(env_t *env, const char *name, node_t *value, bool is_constant) {
     for (int i = 0; i < env->len; ++i) {
         if (strcmp(env->entries[i].name, name) == 0) {
             env->entries[i].value = value;
+            env->entries[i].is_constant = is_constant;
             return true;
         }
     }
@@ -67,7 +91,7 @@ bool env_set(env_t *env, const char *name, node_t *value) {
 
     char* key = dupstr(name);
     if (!key) return false;
-    env->entries[env->len++] = (env_entry_t){ key, value };
+    env->entries[env->len++] = (env_entry_t){ is_constant, key, value };
     return true;
 }
 
