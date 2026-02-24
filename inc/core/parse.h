@@ -7,8 +7,8 @@
 
 #define IDENTIFIER_MAX_LEN 16
 
-#include "core/lex.h"
 #include "core/env.h"
+#include "core/lex.h"
 
 typedef struct node node_t;
 typedef struct arena arena_t;
@@ -37,4 +37,4 @@ typedef struct {
 
 stmt_t parse_stmnt(arena_t *a, const char *input, const char **err);
 
-#endif //IKCAS_PARSE_H
+#endif // IKCAS_PARSE_H

@@ -18,9 +18,9 @@ typedef struct arena {
     arena_block_t *head;
 } arena_t;
 
-char* arena_strdup(arena_t *a, const char *s, ssize_t n);
+char *arena_strdup(arena_t *a, const char *s, ssize_t n);
 void arena_init(arena_t *a);
 void arena_destroy(arena_t *a);
-void* arena_alloc(arena_t *a, size_t size);
+void *arena_alloc(arena_t *a, size_t size);
 
-#endif //IKCAS_ARENA_H
+#endif // IKCAS_ARENA_H

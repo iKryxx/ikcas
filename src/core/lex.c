@@ -7,23 +7,28 @@
 #include <ctype.h>
 #include <string.h>
 
-static bool is_ident0(int c) { return isalpha(c) || c == '_';}
-static bool is_ident(int c) { return isalnum(c) || c == '_';}
+static bool is_ident0(int c) { return isalpha(c) || c == '_'; }
+static bool is_ident(int c) { return isalnum(c) || c == '_'; }
 
-static tok_t make_tok(tok_kind_t kind, const char* beg, int len) {
-    tok_t t; memset(&t, 0, sizeof(t));
-    t.kind = kind; t.beg = beg; t.len = len;
+static tok_t make_tok(tok_kind_t kind, const char *beg, int len) {
+    tok_t t;
+    memset(&t, 0, sizeof(t));
+    t.kind = kind;
+    t.beg = beg;
+    t.len = len;
     return t;
 }
 
-static tok_t lex_real(lex_t* l) {
-    const char* s = l->s;
-    while (s[l->i] && isspace((unsigned char)s[l->i])) l->i++;
+static tok_t lex_real(lex_t *l) {
+    const char *s = l->s;
+    while (s[l->i] && isspace((unsigned char)s[l->i]))
+        l->i++;
 
     int c = (unsigned char)s[l->i];
-    if (c == 0) return make_tok(TOK_EOF, s + l->i, 0);
+    if (c == 0)
+        return make_tok(TOK_EOF, s + l->i, 0);
 
-    const char* beg = s + l->i;
+    const char *beg = s + l->i;
 
     if (isdigit(c)) {
         int64_t v = 0;
@@ -32,8 +37,10 @@ static tok_t lex_real(lex_t* l) {
             int d = s[l->i] - '0';
             if (!overflow) {
                 int64_t nv = v * 10 + d;
-                if (nv < v) overflow = true;
-                else v = nv;
+                if (nv < v)
+                    overflow = true;
+                else
+                    v = nv;
             }
             l->i++;
         }
@@ -47,8 +54,9 @@ static tok_t lex_real(lex_t* l) {
             }
         }
 
-        tok_t t; memset(&t, 0, sizeof(t));
-        t = make_tok(TOK_NUM, beg, (int)((s+l->i) - beg));
+        tok_t t;
+        memset(&t, 0, sizeof(t));
+        t = make_tok(TOK_NUM, beg, (int)((s + l->i) - beg));
         t.i64 = is_decimal ? 0 : v;
         t.is_decimal = is_decimal;
         return t;
@@ -56,22 +64,42 @@ static tok_t lex_real(lex_t* l) {
 
     if (is_ident0(c)) {
         l->i++;
-        while (is_ident((unsigned char)s[l->i])) l->i++;
-        return make_tok(TOK_IDENT, beg, (int)((s+l->i) - beg));
+        while (is_ident((unsigned char)s[l->i]))
+            l->i++;
+        return make_tok(TOK_IDENT, beg, (int)((s + l->i) - beg));
     }
 
     l->i++;
     switch (c) {
-        case '+': return make_tok(TOK_PLUS, beg, 1); break;
-        case '-': return make_tok(TOK_MINUS, beg, 1); break;
-        case '*': return make_tok(TOK_STAR, beg, 1); break;
-        case '/': return make_tok(TOK_SLASH, beg, 1); break;
-        case '^': return make_tok(TOK_CARET, beg, 1); break;
-        case '(': return make_tok(TOK_LPAREN, beg, 1); break;
-        case ')': return make_tok(TOK_RPAREN, beg, 1); break;
-        case '=': return make_tok(TOK_EQUALS, beg, 1); break;
-        case ',': return make_tok(TOK_COMMA, beg, 1); break;
-        default: return make_tok(TOK_EOF, beg, 0);
+    case '+':
+        return make_tok(TOK_PLUS, beg, 1);
+        break;
+    case '-':
+        return make_tok(TOK_MINUS, beg, 1);
+        break;
+    case '*':
+        return make_tok(TOK_STAR, beg, 1);
+        break;
+    case '/':
+        return make_tok(TOK_SLASH, beg, 1);
+        break;
+    case '^':
+        return make_tok(TOK_CARET, beg, 1);
+        break;
+    case '(':
+        return make_tok(TOK_LPAREN, beg, 1);
+        break;
+    case ')':
+        return make_tok(TOK_RPAREN, beg, 1);
+        break;
+    case '=':
+        return make_tok(TOK_EQUALS, beg, 1);
+        break;
+    case ',':
+        return make_tok(TOK_COMMA, beg, 1);
+        break;
+    default:
+        return make_tok(TOK_EOF, beg, 0);
     }
 }
 
@@ -92,7 +120,8 @@ void lex_init(lex_t *l, const char *input) {
 }
 
 tok_t lex_peek(lex_t *l) {
-    if (l->has_injected) return l->injected;
+    if (l->has_injected)
+        return l->injected;
     return l->cur;
 }
 
@@ -107,7 +136,8 @@ tok_t lex_next(lex_t *l) {
     l->cur = lex_real(l);
 
     if (is_primary_end(t.kind) && is_primary_start(l->cur.kind)) {
-        // Don't inject '*' before '(' if previous is identifier (potential function call)
+        // Don't inject '*' before '(' if previous is identifier (potential
+        // function call)
         if (!(t.kind == TOK_IDENT && l->cur.kind == TOK_LPAREN)) {
             l->has_injected = true;
             l->injected = make_tok(TOK_STAR, t.beg + t.len, 0);

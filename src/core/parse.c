@@ -9,38 +9,45 @@
 
 #include "core/node.h"
 
-static bool tok_is(parser_t *p, tok_kind_t k) {return lex_peek(&p->lx).kind == k;}
+static bool tok_is(parser_t *p, tok_kind_t k) {
+    return lex_peek(&p->lx).kind == k;
+}
 static tok_t tok_take(parser_t *p) { return lex_next(&p->lx); }
-static void parser_set_errormsg(parser_t *p, const char *msg) { memccpy(p->err, msg, '\0', sizeof(p->err));}
-static node_t** parse_arg_list(parser_t *p, int* out_argc);
-static const char** parse_param_list(parser_t *p, int* out_arity);
-static bool looks_like_funcdef(const char* input);
-static bool parse_decimal_rat(tok_t t, rat_t* out);
+static void parser_set_errormsg(parser_t *p, const char *msg) {
+    memccpy(p->err, msg, '\0', sizeof(p->err));
+}
+static node_t **parse_arg_list(parser_t *p, int *out_argc);
+static const char **parse_param_list(parser_t *p, int *out_arity);
+static bool looks_like_funcdef(const char *input);
+static bool parse_decimal_rat(tok_t t, rat_t *out);
 
 static bool tok_expect(parser_t *p, tok_kind_t k, const char *msg) {
-    if (tok_is(p,k)) { tok_take(p); return true;}
+    if (tok_is(p, k)) {
+        tok_take(p);
+        return true;
+    }
     parser_set_errormsg(p, msg);
     return false;
 }
 
 static int lbp(tok_kind_t k) {
     switch (k) {
-        case TOK_PLUS:
-        case TOK_MINUS:
-            return 10;
-        case TOK_STAR:
-        case TOK_SLASH:
-            return 20;
-        case TOK_CARET:
-            return 30;
-        default:
-            return 0;
+    case TOK_PLUS:
+    case TOK_MINUS:
+        return 10;
+    case TOK_STAR:
+    case TOK_SLASH:
+        return 20;
+    case TOK_CARET:
+        return 30;
+    default:
+        return 0;
     }
 }
 
-static node_t* expr(parser_t* p, int minbp);
+static node_t *expr(parser_t *p, int minbp);
 
-static node_t* nud(parser_t *p) {
+static node_t *nud(parser_t *p) {
     tok_t t = tok_take(p);
 
     if (t.kind == TOK_NUM) {
@@ -56,7 +63,7 @@ static node_t* nud(parser_t *p) {
     }
 
     if (t.kind == TOK_IDENT) {
-        char* name = arena_strdup(p->arena, t.beg, t.len);
+        char *name = arena_strdup(p->arena, t.beg, t.len);
         if (!name) {
             parser_set_errormsg(p, "Out of memory error");
             return nullptr;
@@ -65,31 +72,36 @@ static node_t* nud(parser_t *p) {
         if (tok_is(p, TOK_LPAREN)) {
             tok_take(p); // eat '('
             int argc = 0;
-            node_t** args = parse_arg_list(p, &argc);
-            if (!args) return nullptr;
+            node_t **args = parse_arg_list(p, &argc);
+            if (!args)
+                return nullptr;
             return node_call(p->arena, name, args, argc);
         }
         return node_symbol(p->arena, t.beg, t.len);
     }
 
     if (t.kind == TOK_MINUS) {
-        node_t* r = expr(p, 25);
-        if (!r) return nullptr;
+        node_t *r = expr(p, 25);
+        if (!r)
+            return nullptr;
         return node_unary(p->arena, NODE_NEG, r);
     }
 
     if (t.kind == TOK_LPAREN) {
-        node_t* r = expr(p, 0);
-        if (!r) return nullptr;
-        if (!tok_expect(p, TOK_RPAREN, "expected ')'")) return nullptr;
+        node_t *r = expr(p, 0);
+        if (!r)
+            return nullptr;
+        if (!tok_expect(p, TOK_RPAREN, "expected ')'"))
+            return nullptr;
         return r;
     }
     parser_set_errormsg(p, "unexpected token");
     return nullptr;
 }
 
-static bool parse_decimal_rat(tok_t t, rat_t* out) {
-    if (!out || !t.beg || t.len <= 0) return false;
+static bool parse_decimal_rat(tok_t t, rat_t *out) {
+    if (!out || !t.beg || t.len <= 0)
+        return false;
 
     int64_t num = 0;
     int64_t den = 1;
@@ -98,54 +110,64 @@ static bool parse_decimal_rat(tok_t t, rat_t* out) {
     for (int i = 0; i < t.len; i++) {
         char c = t.beg[i];
         if (c == '.') {
-            if (past_dot) return false;
+            if (past_dot)
+                return false;
             past_dot = true;
             continue;
         }
-        if (c < '0' || c > '9') return false;
+        if (c < '0' || c > '9')
+            return false;
 
         int d = c - '0';
-        if (num > (INT64_MAX - d) / 10) return false;
+        if (num > (INT64_MAX - d) / 10)
+            return false;
         num = num * 10 + d;
 
         if (past_dot) {
-            if (den > INT64_MAX / 10) return false;
+            if (den > INT64_MAX / 10)
+                return false;
             den *= 10;
         }
     }
 
-    if (!past_dot) return false;
-    *out = rat_norm((rat_t){ num, den });
+    if (!past_dot)
+        return false;
+    *out = rat_norm((rat_t){num, den});
     return true;
 }
 
-static node_t* led(parser_t *p, node_t* left, tok_t op) {
+static node_t *led(parser_t *p, node_t *left, tok_t op) {
     int bp = lbp(op.kind);
 
     if (op.kind == TOK_PLUS) {
-        node_t* r = expr(p, bp);
-        if (!r) return r;
+        node_t *r = expr(p, bp);
+        if (!r)
+            return r;
         return node_bin(p->arena, NODE_ADD, left, r);
     }
     if (op.kind == TOK_MINUS) {
-        node_t* r = expr(p, bp);
-        if (!r) return r;
+        node_t *r = expr(p, bp);
+        if (!r)
+            return r;
         return node_bin(p->arena, NODE_SUB, left, r);
     }
     if (op.kind == TOK_STAR) {
-        node_t* r = expr(p, bp);
-        if (!r) return r;
+        node_t *r = expr(p, bp);
+        if (!r)
+            return r;
         return node_bin(p->arena, NODE_MUL, left, r);
     }
     if (op.kind == TOK_SLASH) {
-        node_t* r = expr(p, bp);
-        if (!r) return r;
+        node_t *r = expr(p, bp);
+        if (!r)
+            return r;
         return node_bin(p->arena, NODE_DIV, left, r);
     }
     if (op.kind == TOK_CARET) {
         // right associative, parse with bp - 1
-        node_t* r = expr(p, bp - 1);
-        if (!r) return r;
+        node_t *r = expr(p, bp - 1);
+        if (!r)
+            return r;
 
         return node_bin(p->arena, NODE_POW, left, r);
     }
@@ -154,25 +176,28 @@ static node_t* led(parser_t *p, node_t* left, tok_t op) {
     return nullptr;
 }
 
-static node_t* expr(parser_t *p, int minbp) {
-    node_t* left = nud(p);
-    if (!left) return left;
+static node_t *expr(parser_t *p, int minbp) {
+    node_t *left = nud(p);
+    if (!left)
+        return left;
 
     for (;;) {
         tok_t t = lex_peek(&p->lx);
         int bp = lbp(t.kind);
-        if (bp <= minbp) break;
+        if (bp <= minbp)
+            break;
 
         tok_t op = tok_take(p);
         left = led(p, left, op);
-        if (!left) return left;
+        if (!left)
+            return left;
     }
     return left;
 }
 
-static node_t** parse_arg_list(parser_t *p, int* out_argc) {
+static node_t **parse_arg_list(parser_t *p, int *out_argc) {
     int cap = 4, len = 0;
-    node_t** tmp = arena_alloc(p->arena, cap * sizeof(node_t*));
+    node_t **tmp = arena_alloc(p->arena, cap * sizeof(node_t *));
     if (!tmp) {
         parser_set_errormsg(p, "out of memory");
         return nullptr;
@@ -185,11 +210,12 @@ static node_t** parse_arg_list(parser_t *p, int* out_argc) {
     }
 
     for (;;) {
-        node_t* e = expr(p, 0);
-        if (!e) return nullptr;
+        node_t *e = expr(p, 0);
+        if (!e)
+            return nullptr;
         if (len == cap) {
             int ncap = cap * 2;
-            node_t** nt = arena_alloc(p->arena, ncap * sizeof(node_t*));
+            node_t **nt = arena_alloc(p->arena, ncap * sizeof(node_t *));
             if (!nt) {
                 parser_set_errormsg(p, "out of memory");
                 return nullptr;
@@ -219,9 +245,9 @@ static node_t** parse_arg_list(parser_t *p, int* out_argc) {
     return tmp;
 }
 
-const char ** parse_param_list(parser_t *p, int *out_arity) {
+const char **parse_param_list(parser_t *p, int *out_arity) {
     int cap = 4, len = 0;
-    const char** tmp = arena_alloc(p->arena, cap * sizeof(const char*));
+    const char **tmp = arena_alloc(p->arena, cap * sizeof(const char *));
     if (!tmp) {
         parser_set_errormsg(p, "out of memory");
         return nullptr;
@@ -249,7 +275,8 @@ const char ** parse_param_list(parser_t *p, int *out_arity) {
 
         if (len == cap) {
             int ncap = cap * 2;
-            const char** nt = arena_alloc(p->arena, ncap * sizeof(const char*));
+            const char **nt =
+                arena_alloc(p->arena, ncap * sizeof(const char *));
             if (!nt) {
                 parser_set_errormsg(p, "out of memory");
                 return nullptr;
@@ -278,21 +305,24 @@ const char ** parse_param_list(parser_t *p, int *out_arity) {
     return tmp;
 }
 
-static bool looks_like_funcdef(const char* input) {
+static bool looks_like_funcdef(const char *input) {
     lex_t lx;
     lex_init(&lx, input);
 
-    if (lex_peek(&lx).kind != TOK_IDENT) return false;
+    if (lex_peek(&lx).kind != TOK_IDENT)
+        return false;
     lex_next(&lx);
 
-    if (lex_peek(&lx).kind != TOK_LPAREN) return false;
+    if (lex_peek(&lx).kind != TOK_LPAREN)
+        return false;
     lex_next(&lx);
 
     if (lex_peek(&lx).kind == TOK_RPAREN) {
         lex_next(&lx);
     } else {
         for (;;) {
-            if (lex_peek(&lx).kind != TOK_IDENT) return false;
+            if (lex_peek(&lx).kind != TOK_IDENT)
+                return false;
             lex_next(&lx);
 
             if (lex_peek(&lx).kind == TOK_COMMA) {
@@ -315,7 +345,7 @@ stmt_t parse_stmnt(arena_t *a, const char *input, const char **err) {
     p.arena = a;
     lex_init(&p.lx, input);
 
-    stmt_t out = { 0 };
+    stmt_t out = {0};
     out.kind = STMT_EXPR;
 
     // Look for: IDENT '(' ... ')' '=' ...
@@ -326,26 +356,26 @@ stmt_t parse_stmnt(arena_t *a, const char *input, const char **err) {
         if (tok_is(&p, TOK_LPAREN) && looks_like_funcdef(input)) {
             tok_take(&p); // '('
             int arity = 0;
-            const char** params = parse_param_list(&p, &arity);
+            const char **params = parse_param_list(&p, &arity);
             if (!params) {
                 if (err) {
-                    strcpy(*(char**)err, p.err);
+                    strcpy(*(char **)err, p.err);
                 }
-                return (stmt_t){ 0 };
+                return (stmt_t){0};
             }
 
             if (tok_is(&p, TOK_EQUALS)) {
                 tok_take(&p);
-                node_t* body = expr(&p, 0);
+                node_t *body = expr(&p, 0);
                 if (!body) {
                     if (err) {
-                        strcpy(*(char**)err, p.err);
+                        strcpy(*(char **)err, p.err);
                     }
-                    return (stmt_t){ 0 };
+                    return (stmt_t){0};
                 }
                 if (lex_peek(&p.lx).kind != TOK_EOF) {
                     parser_set_errormsg(&p, "unexpected trailing input.");
-                    return (stmt_t){ 0 };
+                    return (stmt_t){0};
                 }
 
                 out.kind = STMT_FUNCDEF;
@@ -355,23 +385,23 @@ stmt_t parse_stmnt(arena_t *a, const char *input, const char **err) {
                 out.expr = body;
                 if (!out.name) {
                     parser_set_errormsg(&p, "Out of memory error");
-                    return (stmt_t){ 0 };
+                    return (stmt_t){0};
                 }
                 return out;
             }
             lex_init(&p.lx, input);
         } else if (tok_is(&p, TOK_EQUALS)) {
             tok_take(&p);
-            node_t* rhs = expr(&p, 0);
+            node_t *rhs = expr(&p, 0);
             if (!rhs) {
                 if (err) {
-                    strcpy(*(char**)err, p.err);
+                    strcpy(*(char **)err, p.err);
                 }
-                return (stmt_t){ 0 };
+                return (stmt_t){0};
             }
             if (lex_peek(&p.lx).kind != TOK_EOF) {
                 parser_set_errormsg(&p, "unexpected trailing input");
-                return (stmt_t){ 0 };
+                return (stmt_t){0};
             }
 
             out.kind = STMT_ASSIGN;
@@ -381,7 +411,7 @@ stmt_t parse_stmnt(arena_t *a, const char *input, const char **err) {
             out.params = nullptr;
             if (!out.name) {
                 parser_set_errormsg(&p, "Out of memory");
-                return (stmt_t){ 0 };
+                return (stmt_t){0};
             }
             return out;
         } else {
@@ -390,18 +420,18 @@ stmt_t parse_stmnt(arena_t *a, const char *input, const char **err) {
         }
     }
 
-    node_t* r = expr(&p, 0);
+    node_t *r = expr(&p, 0);
     if (!r) {
         if (err) {
-            strcpy((char*)err, p.err);
+            strcpy((char *)err, p.err);
         }
-        return (stmt_t){ .name = nullptr, .expr = nullptr};
+        return (stmt_t){.name = nullptr, .expr = nullptr};
     }
 
     // must end
     if (lex_peek(&p.lx).kind != TOK_EOF) {
         parser_set_errormsg(&p, "unexpected token");
-        return (stmt_t){ .name = nullptr, .expr = nullptr};
+        return (stmt_t){.name = nullptr, .expr = nullptr};
     }
     out.kind = STMT_EXPR;
     out.expr = r;

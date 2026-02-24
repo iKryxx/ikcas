@@ -9,7 +9,8 @@
 
 typedef struct {
     char *buf;
-    int cap; int len;
+    int cap;
+    int len;
 } sb_t;
 
 void sb_init(sb_t *sb, char *buf, int cap);
@@ -18,4 +19,4 @@ void sb_putc(sb_t *sb, char c);
 
 void node_print(sb_t *sb, node_t *n, int parent_prec);
 
-#endif //IKCAS_PRINT_H
+#endif // IKCAS_PRINT_H

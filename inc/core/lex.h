@@ -22,7 +22,6 @@ typedef enum {
     TOK_COMMA
 } tok_kind_t;
 
-
 typedef struct {
     tok_kind_t kind;
     const char *beg;
@@ -42,8 +41,8 @@ typedef struct {
     tok_t prev_real; // last real token
 } lex_t;
 
-void lex_init(lex_t *l, const char* input);
+void lex_init(lex_t *l, const char *input);
 tok_t lex_peek(lex_t *l);
 tok_t lex_next(lex_t *l);
 
-#endif //IKCAS_LEX_H
+#endif // IKCAS_LEX_H

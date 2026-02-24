@@ -6,7 +6,6 @@
 #define IKCAS_PLOT_H
 #include "ui.h"
 
-void plot_demo(ui_t* ui);
+void plot_demo(ui_t *ui);
 
-
-#endif //IKCAS_PLOT_H
+#endif // IKCAS_PLOT_H

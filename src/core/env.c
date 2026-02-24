@@ -9,13 +9,14 @@
 #include <string.h>
 
 bool lookup_env(void *ctx, const char *name, node_t **out) {
-    env_t* env = (env_t*)ctx;
-    if (!env || !name) return false;
+    env_t *env = (env_t *)ctx;
+    if (!env || !name)
+        return false;
     return env_get(env, name, out);
 }
 
 bool lookup_overlay(void *ctx, const char *name, node_t **out) {
-    env_overlay_t* o = (env_overlay_t*)ctx;
+    env_overlay_t *o = (env_overlay_t *)ctx;
     return env_overlay_get(o, name, out);
 }
 
@@ -26,16 +27,20 @@ void env_init(env_t *env) {
 }
 
 void env_free(env_t *env) {
-    if (!env) return;
-    for (int i = 0; i < env->len; ++i) free((void*)env->entries[i].name);
+    if (!env)
+        return;
+    for (int i = 0; i < env->len; ++i)
+        free((void *)env->entries[i].name);
     free(env->entries);
-    env->entries = nullptr; env->len = env->cap = 0;
+    env->entries = nullptr;
+    env->len = env->cap = 0;
 }
 
-static char* dupstr(const char* s) {
+static char *dupstr(const char *s) {
     size_t len = strlen(s);
-    char* res = malloc(len + 1);
-    if (!res) return nullptr;
+    char *res = malloc(len + 1);
+    if (!res)
+        return nullptr;
     memcpy(res, s, len + 1);
     return res;
 }
@@ -43,7 +48,8 @@ static char* dupstr(const char* s) {
 bool env_get(const env_t *env, const char *name, node_t **out) {
     for (int i = 0; i < env->len; ++i) {
         if (strcmp(env->entries[i].name, name) == 0) {
-            if (out) *out = env->entries[i].value;
+            if (out)
+                *out = env->entries[i].value;
             return true;
         }
     }
@@ -51,7 +57,8 @@ bool env_get(const env_t *env, const char *name, node_t **out) {
 }
 
 bool env_remove(env_t *env, const char *name) {
-    if (!env || !name) return false;
+    if (!env || !name)
+        return false;
 
     int index = 0;
     for (; index < env->len; ++index) {
@@ -62,9 +69,10 @@ bool env_remove(env_t *env, const char *name) {
             break;
         }
     }
-    if (index == env->len) return false;
+    if (index == env->len)
+        return false;
 
-    free((void*)env->entries[index].name);
+    free((void *)env->entries[index].name);
 
     for (; index < env->len - 1; ++index) {
         env->entries[index] = env->entries[index + 1];
@@ -84,35 +92,42 @@ bool env_set(env_t *env, const char *name, node_t *value, bool is_constant) {
 
     if (env->cap == env->len) {
         int ncap = env->cap ? env->cap * 2 : 16;
-        void* nv = realloc(env->entries, ncap * sizeof(env_entry_t));
-        if (!nv) return false;
-        env->entries = nv; env->cap = ncap;
+        void *nv = realloc(env->entries, ncap * sizeof(env_entry_t));
+        if (!nv)
+            return false;
+        env->entries = nv;
+        env->cap = ncap;
     }
 
-    char* key = dupstr(name);
-    if (!key) return false;
-    env->entries[env->len++] = (env_entry_t){ is_constant, key, value };
+    char *key = dupstr(name);
+    if (!key)
+        return false;
+    env->entries[env->len++] = (env_entry_t){is_constant, key, value};
     return true;
 }
 
 bool env_overlay_get(const env_overlay_t *o, const char *name, node_t **out) {
-    if (!o || !name) return false;
+    if (!o || !name)
+        return false;
     for (int i = 0; i < o->len; ++i) {
         if (strcmp(o->names[i], name) == 0) {
-            if (out) *out = (node_t*)o->values[i];
+            if (out)
+                *out = (node_t *)o->values[i];
             return true;
         }
     }
-    if (!o->base_lookup) return false;
+    if (!o->base_lookup)
+        return false;
     return o->base_lookup(o->base_ctx, name, out);
 }
 
-bool env_overlay_get_const(const env_overlay_t *o, const char *name, const node_t **out) {
-    node_t* tmp = nullptr;
+bool env_overlay_get_const(const env_overlay_t *o, const char *name,
+                           const node_t **out) {
+    node_t *tmp = nullptr;
     if (env_overlay_get(o, name, &tmp)) {
-        if (out) *out = tmp;
+        if (out)
+            *out = tmp;
         return true;
     }
     return false;
 }
-
