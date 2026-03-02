@@ -12,6 +12,7 @@ A Linux-first symbolic CAS TUI app in C (CMake), with exact rational arithmetic 
 - Evaluation mode toggle:
   - `:mode exact`
   - `:mode approx`
+- Plotting functions using Sixel
 
 ## Build
 
@@ -47,6 +48,7 @@ Run:
   - `:mode exact`
   - `:mode approx`
   - `:quit` or `:q`
+  - `:plot`
   - etc.
 
 ## Notes

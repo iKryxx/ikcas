@@ -16,5 +16,6 @@ typedef struct {
 eval_result_t node_eval_exact(arena_t *a, node_t *n, env_t *env);
 eval_result_t node_approx(arena_t *a, const node_t *n);
 eval_result_t node_eval_approx(arena_t *a, node_t *n, env_t *env);
-
+eval_result_t node_eval_function_at(arena_t *a, node_t *n, env_t *env,
+                                    node_t *at);
 #endif // IKCAS_EVAL_H

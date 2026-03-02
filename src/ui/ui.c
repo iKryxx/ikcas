@@ -11,6 +11,7 @@
 
 #include "core/core.h"
 #include "core/env.h"
+#include "ui/plot.h"
 
 static bool detect_bitmap(const struct notcurses *nc) {
     return notcurses_canpixel(nc);
@@ -186,6 +187,24 @@ static cmd_status_t ui__builtin_undef(cmd_ctx_t *ctx) {
     return CMD_OK;
 }
 
+static cmd_status_t ui__builtin_plot(cmd_ctx_t *ctx) {
+    if (ctx->argc != 4) {
+        ui_print(ctx->ui, "Usage: :plot <symbol> <from> <to>");
+        return CMD_ERROR;
+    }
+    if (!cmd_is_double(ctx->argv[2]) || !cmd_is_double(ctx->argv[3])) {
+        ui_print(ctx->ui, "Usage: :plot <symbol> <from> <to>");
+        return CMD_ERROR;
+    }
+
+    const char *symbol = ctx->argv[1];
+    double from = strtof(ctx->argv[2], nullptr);
+    double to = strtof(ctx->argv[3], nullptr);
+
+    plot_callable(ctx->ui, symbol, from, to);
+    return CMD_OK;
+}
+
 static void ui__register_builtins(cmd_registry_t *r, struct ui *ui) {
     (void)ui;
     cmd_register(r, "help", ui__builtin_help, r, "List commands or :help <cmd>",
@@ -195,9 +214,11 @@ static void ui__register_builtins(cmd_registry_t *r, struct ui *ui) {
     cmd_register(r, "quit", ui__builtin_quit, r, "Quit ikcas", 0);
     cmd_register(r, "q", ui__builtin_quit, r, "Quit ikcas", 0);
     cmd_register(r, "precision", ui__builtin_precision, r,
-                 "Set precision for decimal numbers: :precision <number", 0);
+                 "Set precision for decimal numbers: :precision <number>", 0);
     cmd_register(r, "undef", ui__builtin_undef, r,
                  "Undefine a symbol: :undef <symbol1> [symbol2...]", 0);
+    cmd_register(r, "plot", ui__builtin_plot, r,
+                 "Plot a function: plot <symbol> <from> <to>", 0);
 }
 
 bool ui_init(ui_t *ui) {

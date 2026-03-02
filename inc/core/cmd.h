@@ -42,4 +42,6 @@ int cmd_count(const cmd_registry_t *r);
 const cmd_def_t *cmd_at(const cmd_registry_t *r, int i);
 
 bool cmd_is_int(const char *str);
+bool cmd_is_double(const char *str);
+
 #endif // IKCAS_CMD_H

@@ -3,22 +3,20 @@
 //
 
 #include "ui/plot.h"
+#include "core/core.h"
+#include "core/eval.h"
 #include "core/node.h"
+#include <float.h>
 #include <math.h>
 
-static inline void plot__putpx(unsigned char *rgba, int w, int x, int y,
-                               unsigned char r, unsigned char g,
-                               unsigned char b, unsigned char a) {
-    unsigned char *p = rgba + (y * w + x) * 4;
-    p[0] = r;
-    p[1] = g;
-    p[2] = b;
-    p[3] = a;
-}
+typedef struct {
+    bool ok;
+    double y;
+} plot_sample_t;
 
-static inline void plot__line(unsigned char *rgba, int W, int H, int x0, int y0,
-                              int x1, int y1, unsigned char r, unsigned char g,
-                              unsigned char b, unsigned char a) {
+static void plot__line(unsigned char *rgba, int W, int H, int x0, int y0,
+                       int x1, int y1, unsigned char r, unsigned char g,
+                       unsigned char b, unsigned char a) {
     int dx = abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
     int dy = -abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
     int err = dx + dy;
@@ -44,67 +42,77 @@ static inline void plot__line(unsigned char *rgba, int W, int H, int x0, int y0,
         }
     }
 }
-/*
-void plot_callable(ui_t *ui, node_t *fun, double from, double to) {
-    ui_viz_clear(ui);
 
-    const int W = 640;
-    const int H = 320;
-
-    const int stride = W * 4;
-
-    unsigned char rgba[stride] = { 0 };
-
-    int midx = W / 2;
-    int midy = H / 2;
-
-    // Draw Axes
-    for (int x = 0; x < W; ++x) { plot__putpx(rgba, W, x, midy, 200, 200, 200,
-255); } for (int y = 0; y < H; ++y) { plot__putpx(rgba, W, midx, y, 200, 200,
-200, 255); }
-
-    int prev_x = 0, prev_y = 0;
-    bool has_prev = false;
-
-
-    // for(int )
-}
-*/
-void plot_demo(ui_t *ui) {
-    ui_viz_clear(ui);
-    ui_viz_title(ui, "Plot: y = sin(x)");
-
-    const int W = 640;
-    const int H = 320;
-    const int stride = W * 4;
-
-    unsigned char *rgba = (unsigned char *)malloc((size_t)stride * (size_t)H);
-    if (!rgba) {
-        ui_print(ui, "Error: OOM allocating plot buffer.");
+void plot_callable(ui_t *ui, const char *name, double from, double to) {
+    if (from >= to) {
+        ui_print(ui, "Please input a correct range.");
         return;
     }
-    memset(rgba, 0, (size_t)stride * (size_t)H);
 
-    // axes
-    int midx = W / 2;
-    int midy = H / 2;
+    ui_viz_clear(ui);
 
-    for (int x = 0; x < W; ++x) {
-        plot__putpx(rgba, W, x, midy, 200, 200, 200, 255);
-    }
-    for (int y = 0; y < H; ++y) {
-        plot__putpx(rgba, W, midx, y, 200, 200, 200, 255);
-    }
+    const int W = 640;
+    const int H = 640;
+
+    const int stride = W * 4;
+
+    unsigned char rgba[stride * H];
+    memset(rgba, 0, stride * H);
+
+    arena_t func_mem = {0};
+    arena_init(&func_mem);
+
+    node_t xr = {.kind = NODE_REAL, .real = 0.0};
+    node_t *vals[1] = {&xr};
 
     int prev_x = 0, prev_y = 0;
     bool has_prev = false;
 
+    node_t *call = node_call(&func_mem, name, (node_t **)vals, 1);
+    plot_sample_t samples[W];
+    double y_min = DBL_MAX;
+    double y_max = -DBL_MAX;
     for (int x = 0; x < W; ++x) {
-        double t = (double)x / (double)(W - 1);
-        double xx = -M_PI + t * (2.0 * M_PI);
-        double yy = sin(xx);
-        int y = (int)lround((0.5 - 0.45 * yy) * (double)(H - 1));
+        double t = (double)x / (double)(W - 1); // 0..1
+        double xx = from + t * (to - from);     // "World" x
+        vals[0]->real = xx;
 
+        eval_result_t res = node_eval_approx(&func_mem, call, core_get_g_env());
+        samples[x] =
+            (plot_sample_t){.ok = res.ok, .y = (res.ok ? res.out->real : 0.0)};
+
+        if (samples[x].y < y_min)
+            y_min = samples[x].y;
+        if (samples[x].y > y_max)
+            y_max = samples[x].y;
+    }
+
+    double margin = (y_max - y_min) * 0.05;
+    y_max += margin;
+    y_min -= margin;
+    if (y_max == INFINITY)
+        y_max = DBL_MAX;
+    if (y_min == -INFINITY)
+        y_min = -DBL_MAX;
+    if (y_max - y_min <= 1.0) {
+        y_max += 2.5;
+        y_min -= 2.5;
+    }
+    // Draw Axes
+    int x_0 = (-from / (to - from)) * (double)(W - 1);
+    double v_0 = (-y_min) / (y_max - y_min);
+    int y_0 = lround((1.0 - v_0) * (double)(H - 1));
+
+    plot__line(rgba, W, H, 0, y_0, W, y_0, 200, 200, 200, 255);
+    plot__line(rgba, W, H, x_0, 0, x_0, H, 200, 200, 200, 255);
+
+    for (int x = 0; x < W; ++x) {
+        double yy = samples[x].y;
+
+        double v = (yy - y_min) / (y_max - y_min);
+        int y = lround((1.0 - v) * (double)(H - 1));
+
+        // int y = (int)lround(yy * H);
         if (!has_prev) {
             prev_x = x;
             prev_y = y;
@@ -116,9 +124,7 @@ void plot_demo(ui_t *ui) {
         prev_x = x;
         prev_y = y;
     }
-
     struct ncvisual *ncv = ncvisual_from_rgba(rgba, H, stride, W);
-    free(rgba);
     if (!ncv) {
         ui_print(ui, "Error: OOM allocating plot visual.");
         return;
@@ -139,4 +145,6 @@ void plot_demo(ui_t *ui) {
         ui_print(ui, "Error: OOM allocating plot visual.");
         return;
     }
+
+    arena_destroy(&func_mem);
 }

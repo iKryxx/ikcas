@@ -6,6 +6,8 @@
 #define IKCAS_PLOT_H
 #include "ui.h"
 
-void plot_demo(ui_t *ui);
+typedef struct arena arena_t;
+
+void plot_callable(ui_t *ui, const char *name, double from, double to);
 
 #endif // IKCAS_PLOT_H

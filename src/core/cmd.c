@@ -117,6 +117,33 @@ bool cmd_is_int(const char *str) {
     return true;
 }
 
+bool cmd_is_double(const char *str) {
+    char *sv = (char *)str;
+    bool is_first = true;
+    bool has_dot = false;
+    while (sv && *sv) {
+        if (is_first) {
+            is_first = false;
+            if (*sv == '-') {
+                sv++;
+                continue;
+            }
+        }
+        if (*sv == '.') {
+            if (has_dot) {
+                return false;
+            }
+            has_dot = true;
+            sv++;
+            continue;
+        }
+        if (*sv >= '0' && *sv++ <= '9')
+            continue;
+        return false;
+    }
+    return true;
+}
+
 static void skip_ws(const char **s) {
     while (**s && isspace((unsigned char)**s))
         (*s)++;

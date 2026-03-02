@@ -500,3 +500,96 @@ eval_result_t node_eval_approx(arena_t *a, node_t *n, env_t *env) {
         return ex;
     return approx_impl(a, ex.out, lookup_env, env);
 }
+
+eval_result_t node_eval_function_at(arena_t *a, node_t *n, env_t *env,
+                                    node_t *at) {
+    lookup_fn_t lookup = lookup_env;
+    void *lctx = (void *)env;
+
+    switch (n->kind) {
+
+    case NODE_CALL: {
+        node_t **args = arena_alloc(a, n->call.argc * sizeof(node_t *));
+        if (!args)
+            return fail("out of memory");
+        for (int i = 0; i < n->call.argc; i++) {
+            eval_result_t ai = approx_impl(a, n->call.args[i], lookup, lctx);
+            if (!ai.ok)
+                return ai;
+            args[i] = ai.out;
+        }
+
+        if (lookup) {
+            const node_t *callee = nullptr;
+            eval_result_t rc =
+                resolve_callable_impl(n->call.name, lookup, lctx, &callee);
+            if (!rc.ok)
+                return rc;
+
+            const callable_t *c = callee->callable;
+            const int argc = n->call.argc;
+            if (argc < c->min_arity || argc > c->max_arity)
+                return fail("wrong arity");
+
+            if (c->kind == CALL_BUILTIN) {
+                const builtin_fn_t *bf = c->builtin;
+                const char *berr = nullptr;
+                node_t *folded =
+                    bf->eval_exact
+                        ? bf->eval_exact(a, args, argc, lookup, lctx, &berr)
+                        : nullptr;
+                if (berr)
+                    return fail(berr);
+                if (folded)
+                    return approx_impl(a, folded, lookup, lctx);
+            } else if (c->kind == CALL_USER) {
+                const user_fn_t *uf = c->user;
+                if (argc != uf->arity)
+                    return fail("wrong arity");
+
+                /*
+                const char **names =
+                    arena_alloc(a, argc * sizeof(const char *));
+                const node_t **values =
+                    arena_alloc(a, argc * sizeof(const node_t *));
+                if (!names || !values)
+                    return fail("out of memory");
+
+                for (int i = 0; i < argc; i++) {
+                    names[i] = uf->params[i];
+                    values[i] = args[i];
+                }
+                */
+                const char *names[1] = {"x"};
+                const node_t *values[1] = {at};
+                env_overlay_t o = {0};
+                o.base_ctx = lctx;
+                o.base_lookup = lookup;
+                o.names = names;
+                o.values = values;
+                o.len = argc;
+
+                eval_result_t ev = eval_impl(a, uf->body, lookup_overlay, &o);
+                if (!ev.ok)
+                    return ev;
+                return approx_impl(a, ev.out, lookup_overlay, &o);
+            }
+        }
+
+        return ok(node_call(a, arena_strdup(a, n->call.name, -1), args,
+                            n->call.argc));
+    }
+    case NODE_RAT:
+    case NODE_REAL:
+    case NODE_SYMBOL:
+    case NODE_NEG:
+    case NODE_ADD:
+    case NODE_SUB:
+    case NODE_MUL:
+    case NODE_DIV:
+    case NODE_POW:
+    case NODE_CALLABLE:
+    default:
+        return fail("symbol has to be callable");
+    }
+}
