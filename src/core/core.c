@@ -35,6 +35,9 @@ void core_init(void) {
 
     node_t *abs = node_callable_builtin(&g_store, &FN_ABS);
     env_set(&g_env, "abs", abs, true);
+
+    node_t *sin = node_callable_builtin(&g_store, &FN_SIN);
+    env_set(&g_env, "sin", sin, true);
 }
 
 void core_shutdown(void) {

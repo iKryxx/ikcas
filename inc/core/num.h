@@ -18,7 +18,7 @@ rat_t rat_add(rat_t a, rat_t b);
 rat_t rat_sub(rat_t a, rat_t b);
 rat_t rat_mul(rat_t a, rat_t b);
 rat_t rat_div(rat_t a, rat_t b, bool *ok);
-
+rat_t rat_mod(rat_t a, rat_t b, bool *ok);
 rat_t rat_pow_i64(rat_t a, int64_t e, bool *ok);
 
 void rat_to_str(rat_t rat, char *buf, int cap);

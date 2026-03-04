@@ -5,6 +5,10 @@
 #ifndef IKCAS_BUILTINS_H
 #define IKCAS_BUILTINS_H
 
+#define fn_cb_decl(name)                                                       \
+    node_t *name(arena_t *a, node_t **args, int argc, lookup_fn_t lookup,      \
+                 void *lctx, const char **err)
+
 typedef struct node node_t;
 typedef struct arena arena_t;
 typedef bool (*lookup_fn_t)(void *ctx, const char *name, node_t **out);
@@ -17,8 +21,10 @@ typedef struct builtin_fn {
                           lookup_fn_t lookup, void *lctx, const char **err);
 } builtin_fn_t;
 
-node_t *fn_abs_cb(arena_t *a, node_t **args, int argc, lookup_fn_t lookup,
-                  void *lctx, const char **err);
+fn_cb_decl(fn_abs_cb);
 extern builtin_fn_t FN_ABS;
+
+fn_cb_decl(fn_sin_cb);
+extern builtin_fn_t FN_SIN;
 
 #endif // IKCAS_BUILTINS_H

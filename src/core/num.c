@@ -68,6 +68,33 @@ rat_t rat_div(rat_t a, rat_t b, bool *ok) {
     return rat_norm(r);
 }
 
+static int64_t rat_floor(rat_t a) {
+    a = rat_norm(a);
+
+    int64_t q = a.num / a.den;
+
+    if (a.num < 0 && (a.num % a.den) != 0) {
+        q -= 1;
+    }
+    return q;
+}
+
+rat_t rat_mod(rat_t a, rat_t b, bool *ok) {
+    b = rat_norm(b);
+    if (b.den != 1) {
+        if (ok)
+            *ok = false;
+        return rat_from_i64(0);
+    }
+
+    rat_t q = rat_div(a, b, nullptr);
+    int64_t k = rat_floor(q);
+
+    rat_t km = rat_mul(rat_from_i64(k), b);
+    rat_t out = rat_sub(a, km);
+    return rat_norm(out);
+}
+
 rat_t rat_pow_i64(rat_t a, int64_t e, bool *ok) {
     if (ok)
         *ok = true;
