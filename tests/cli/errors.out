@@ -1,0 +1,13 @@
+error: unexpected end of input
+  (1+
+     ^
+error: unknown token '$'
+  1 $ 2
+    ^
+error: division by zero
+  1/0
+  ^^^
+error: unexpected 'x'
+  2x
+   ^
+eval: 7

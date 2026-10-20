@@ -1,0 +1,4 @@
+eval: x
+eval: 6 * x
+eval: 3 * x
+eval: (1/2) * x

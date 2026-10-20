@@ -1,0 +1,22 @@
+[debug] register pass 'fold_constants' (core)
+[debug] register value type 'int' (arith)
+[debug] register value type 'rational' (arith)
+[debug] register value type 'float' (arith)
+[debug] register literal 'int' (arith)
+[debug] register function 'add' (arith)
+[debug] register function 'sub' (arith)
+[debug] register function 'mul' (arith)
+[debug] register function 'div' (arith)
+[debug] register function 'neg' (arith)
+[debug] register function 'float' (arith)
+[debug] register infix operator '+' -> add (arith)
+[debug] register infix operator '-' -> sub (arith)
+[debug] register infix operator '*' -> mul (arith)
+[debug] register infix operator '/' -> div (arith)
+[debug] register prefix operator '-' -> neg (arith)
+[info] loaded plugin 'arith' 1.0 (built in)
+[info] eval '1/2+x'
+[debug] parsed
+[debug] pass fold_constants
+[debug] fold div(1, 2) -> 1/2
+eval: (1/2) + x
