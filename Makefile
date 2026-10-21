@@ -29,7 +29,7 @@ LIB_SRCS = $(shell find src -name '*.c' -not -path 'src/app/*')
 APP_SRCS = $(wildcard src/app/*.c)
 CORE_SRCS = $(wildcard src/core/*.c)
 PLUGIN_SRCS = $(foreach p,$(PLUGINS),$(wildcard plugins/$(p)/*.c))
-SHIPPED_PLUGIN_SRCS = $(wildcard plugins/arith/*.c plugins/extra_ops/*.c)
+SHIPPED_PLUGIN_SRCS = $(wildcard plugins/arith/*.c plugins/extra_ops/*.c plugins/constants/*.c)
 TEST_CORE_SRCS = tests/test_core.c
 TEST_FRONT_SRCS = $(filter-out $(TEST_CORE_SRCS),$(wildcard tests/test_*.c))
 
@@ -81,7 +81,7 @@ plugins.conf:
 # Any plugin directory can also be built as a shared object for -p.
 $(BUILD)/plugins/%.so: $$(wildcard plugins/$$*/*.c)
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -fPIC -shared -DIKCAS_PLUGIN_SHARED -MMD -MP -MF $@.d -o $@ $^
+	$(CC) $(CFLAGS) -fPIC -shared -DIKCAS_PLUGIN_SHARED -MMD -MP -MF $@.d -o $@ $(filter %.c,$^)
 
 plugin-%: $(BUILD)/plugins/%.so
 	@:

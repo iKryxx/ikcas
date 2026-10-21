@@ -13,4 +13,5 @@ cat <<'CONF'
 # Plugins that are not listed here can still be loaded at run time:
 #   make plugin-extra_ops && ikcas -p build/plugins/extra_ops.so
 arith
+constants
 CONF
