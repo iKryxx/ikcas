@@ -1,4 +1,5 @@
 [debug] register pass 'fold_constants' (core)
+[debug] register pass 'collect_assoc' (core)
 [debug] register value type 'int' (arith)
 [debug] register value type 'rational' (arith)
 [debug] register value type 'float' (arith)
@@ -15,8 +16,13 @@
 [debug] register infix operator '/' -> div (arith)
 [debug] register prefix operator '-' -> neg (arith)
 [info] loaded plugin 'arith' 1.0 (built in)
+[debug] register constant 'pi' (constants)
+[debug] register constant 'e' (constants)
+[debug] register constant 'phi' (constants)
+[info] loaded plugin 'constants' 1.0 (built in)
 [info] eval '1/2+x'
 [debug] parsed
 [debug] pass fold_constants
 [debug] fold div(1, 2) -> 1/2
+[debug] pass collect_assoc
 eval: (1/2) + x

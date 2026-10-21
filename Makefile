@@ -34,6 +34,7 @@ TEST_CORE_SRCS = tests/test_core.c
 TEST_FRONT_SRCS = $(filter-out $(TEST_CORE_SRCS),$(wildcard tests/test_*.c))
 
 EXTRA_OPS_SO = $(BUILD)/plugins/extra_ops.so
+CONSTANTS_SO = $(BUILD)/plugins/constants.so
 
 # objs: object files in a flavor's build dir for the given sources.
 # whole: link the whole library, so shared-object plugins can reach any host symbol.
@@ -62,7 +63,7 @@ ikcas$(3): $(call objs,$(1),$(APP_SRCS) $(PLUGIN_SRCS) $(GEN)) $(BUILD)/$(1)/lib
 ikcas_test$(3): $(call objs,$(1),$(CORE_SRCS) $(TEST_CORE_SRCS))
 	$(CC) $(2) -o $$@ $$^
 
-ikcas_test_frontend$(3): $(call objs,$(1),$(TEST_FRONT_SRCS) $(SHIPPED_PLUGIN_SRCS)) $(BUILD)/$(1)/libikcas.a $(EXTRA_OPS_SO)
+ikcas_test_frontend$(3): $(call objs,$(1),$(TEST_FRONT_SRCS) $(SHIPPED_PLUGIN_SRCS)) $(BUILD)/$(1)/libikcas.a $(EXTRA_OPS_SO) $(CONSTANTS_SO)
 	$(CC) $(2) $(EXE_LDFLAGS) -o $$@ $$(filter %.o,$$^) $(call whole,$(1)) $(LDLIBS)
 endef
 
@@ -93,7 +94,7 @@ test: ikcas ikcas_test ikcas_test_frontend cli-test
 
 # The golden files assume plugins.conf still lists arith (the default);
 # extra_ops is loaded with -p where a test needs it.
-cli-test: ikcas $(EXTRA_OPS_SO)
+cli-test: ikcas $(EXTRA_OPS_SO) $(CONSTANTS_SO)
 	sh tests/run_cli_tests.sh ./ikcas
 
 bench: ikcas_test
@@ -102,7 +103,7 @@ bench: ikcas_test
 debug: ikcas_debug ikcas_test_debug ikcas_test_frontend_debug
 
 # Same suites under AddressSanitizer and UBSan.
-asan: ikcas_asan ikcas_test_asan ikcas_test_frontend_asan $(EXTRA_OPS_SO)
+asan: ikcas_asan ikcas_test_asan ikcas_test_frontend_asan $(EXTRA_OPS_SO) $(CONSTANTS_SO)
 	./ikcas_test_asan
 	./ikcas_test_frontend_asan
 	sh tests/run_cli_tests.sh ./ikcas_asan

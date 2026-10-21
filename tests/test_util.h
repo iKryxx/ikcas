@@ -31,8 +31,9 @@ extern int test_checks;
         }                                                                      \
     } while (0)
 
-// Where the tests find the extra_ops shared object (run them from the project root).
+// Where the tests find the plugin shared objects (run them from the project root).
 #define EXTRA_OPS_SO "build/plugins/extra_ops.so"
+#define CONSTANTS_SO "build/plugins/constants.so"
 
 /** New session with arith loaded, and extra_ops too if with_extra is set. Both are linked in, not dlopened. */
 cas_t *test_new_cas(int with_extra);
@@ -63,5 +64,7 @@ void run_plugin_tests(void);
 
 /** Log level tests. */
 void run_log_tests(void);
+/** Tests for the constants plugin. */
+void run_constants_tests(void);
 
 #endif // TEST_UTIL_H

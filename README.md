@@ -174,7 +174,7 @@ A name that isn't a registered function or constant is a symbol. Constant parts 
 > 2*3*x
 eval: 6 * x
 > x*2*3
-eval: x * 2 * 3
+eval: 6 * x
 > x - x
 eval: x - x
 ```

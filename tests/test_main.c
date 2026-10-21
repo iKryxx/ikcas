@@ -11,6 +11,7 @@ int main(void)
     run_eval_tests();
     run_plugin_tests();
     run_log_tests();
+    run_constants_tests();
 
     if (test_failures) {
         printf("%d of %d checks failed\n", test_failures, test_checks);

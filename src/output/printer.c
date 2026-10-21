@@ -49,7 +49,7 @@ static const op_def_t *op_of(const cas_t *cas, const expr_t *e)
         return NULL;
     const fn_def_t *fn = e->as.apply.fn;
     size_t n = e->as.apply.nargs;
-    if (n == 2)
+    if (n >= 2)
         return registry_op_for_fn(cas, fn, FIX_INFIX);
     if (n == 1) {
         const op_def_t *op = registry_op_for_fn(cas, fn, FIX_PREFIX);
@@ -121,12 +121,20 @@ static void print_expr(const cas_t *cas, const expr_t *e, int in_operator, strbu
     int p = op->precedence;
     switch (op->fixity) {
     case FIX_INFIX: {
-        int lp = prec_of(cas, args[0]), rp = prec_of(cas, args[1]);
-        print_operand(cas, args[0], lp < p || (lp == p && op->assoc == ASSOC_RIGHT), sb);
-        sb_puts(sb, " ");
-        sb_puts(sb, op->symbol);
-        sb_puts(sb, " ");
-        print_operand(cas, args[1], rp < p || (rp == p && op->assoc == ASSOC_LEFT), sb);
+        size_t n = e->as.apply.nargs;
+        for (size_t i = 0; i < n; i++) {
+            int ap = prec_of(cas, args[i]);
+            // first operant follows the left side rule, later ones the right side rule
+            int parens = i == 0 ? (ap < p || (ap == p && op->assoc == ASSOC_RIGHT))
+                                : (ap < p || (ap == p && op->assoc == ASSOC_LEFT));
+            if (i) {
+                sb_puts(sb, " ");
+                sb_puts(sb, op->symbol);
+                sb_puts(sb, " ");
+            }
+
+            print_operand(cas, args[i], parens, sb);
+        }
         break;
     }
     case FIX_PREFIX:

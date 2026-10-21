@@ -32,7 +32,7 @@ IKCAS_PLUGIN(my_plugin, "1.0", my_init, NULL /* shutdown */);
 | `registry_add_op` | `op_def_t` | Syntax for a function: symbol, prefix/infix/postfix, precedence, associativity. |
 | `registry_add_literal` | `literal_def_t` | Number syntax: `match` returns the length of a literal at the cursor, `make` builds the value. Longest match wins. |
 | `registry_add_constant` | `constant_def_t` | A named value such as `pi`. |
-| `registry_add_pass` | `pass_def_t` | A step of the simplification pipeline. Passes run in registration order; `fold_constants` is first. |
+| `registry_add_pass` | `pass_def_t` | A step of the simplification pipeline. Passes run in registration order; `fold_constants` is first, then comes `collect_assoc` and so on. |
 
 Operators never touch the parser: it reads binding powers from the registry.
 A higher `precedence` binds tighter. Current levels: `+ -` 10, `* /` 20,

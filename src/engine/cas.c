@@ -32,7 +32,8 @@ cas_t *cas_new(const cas_options_t *opts)
 
     registry_init(&cas->reg);
     if (arena_init(&cas->scratch, cas->opts.scratch_reserve) != 0 ||
-        registry_add_pass(cas, &pass_fold_constants) != CAS_OK) {
+        registry_add_pass(cas, &pass_fold_constants) != CAS_OK ||
+        registry_add_pass(cas, &pass_collect_assoc) != CAS_OK) {
         registry_destroy(&cas->reg);
         arena_destroy(&cas->scratch);
         free(cas);

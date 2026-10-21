@@ -49,9 +49,15 @@ void run_eval_tests(void)
     // symbols survive; the constant parts around them still fold
     check_eval(cas, "x", "x");
     check_eval(cas, "2*3*x", "6 * x");
-    check_eval(cas, "x*2*3", "x * 2 * 3");
-    check_eval(cas, "x+1+2", "x + 1 + 2");
+    check_eval(cas, "x*2*3", "6 * x");
+    check_eval(cas, "5*x*2*3", "30 * x");
+    check_eval(cas, "x+1+2", "3 + x");
     check_eval(cas, "(1+2)*x", "3 * x");
+    check_eval(cas, "x+1", "1 + x"); // a lone constant still moves to the front
+    check_eval(cas, "2*x*3*y*5", "30 * x * y");
+    check_eval(cas, "(x+1)+(2+y)+3", "6 + x + y"); // nested sums are flattened
+    check_eval(cas, "x+x", "x + x");
+    check_eval(cas, "1/0*x*2", "error: division by zero");
     check_eval(cas, "x-x", "x - x");
     check_eval(cas, "1/2*x", "(1/2) * x");
     check_eval(cas, "-x", "-x");

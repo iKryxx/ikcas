@@ -15,7 +15,7 @@
 
 /**
  * Algebraic properties of a function. Rewrite passes are meant to use them
- * (flattening, reordering). Nothing reads them yet.
+ * (flattening, reordering).
  */
 enum {
     FN_COMMUTATIVE = 1u << 0,
