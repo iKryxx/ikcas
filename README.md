@@ -200,12 +200,16 @@ error: '*' cannot start an expression
 
 Everything the interpreter knows about arithmetic lives in a plugin (`plugins/arith/`). A plugin registers value types, functions, operators, number literals, constants and simplification passes. Adding an operator never touches the lexer or parser.
 
-Two plugins ship with the repository:
+Three plugins ship with the repository:
 
-| Plugin | Provides |
-| --- | --- |
-| `arith` | int, rational and float types, integer literals, `+ - * /`, prefix `-`, `float()`. Integrated by default. |
-| `extra_ops` | Right-associative `^` (int or rational base, int exponent) and `abs()`. An example of a third-party plugin. |
+| Plugin | Provides | Integrated |
+| --- | --- | --- |
+| `arith` | int, rational and float types, integer literals, `+ - * /`, prefix `-`, `float()`. | Yes |
+| `extra_ops` | Right-associative `^` (int or rational base, int exponent) and `abs()`. An example of a third-party plugin. | No |
+| `constants` | Mathematical constants like `pi` | Yes |
+
+> Note: Be careful with editing the order of integrated plugins as that could break the program. It is also not recommended to exclude
+Integrated plugins from the program.
 
 ### plugins.conf
 
