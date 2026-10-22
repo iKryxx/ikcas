@@ -79,6 +79,12 @@ eval: 5
 eval: 6 * x
 ```
 
+On a terminal the REPL has line editing and history (the last 1000 lines, up to
+511 bytes each; `cas_options_t` can change both). Up/Down or Ctrl-P/N recall
+lines, Left/Right/Home/End/Ctrl-A/E move, Ctrl-U/K/W and Backspace/Delete edit,
+Ctrl-L clears the screen, Ctrl-C drops the line, Ctrl-D on an empty line quits.
+Piped input is read as plain lines and is not recorded.
+
 Evaluate one expression and exit:
 
 ```sh
@@ -289,7 +295,7 @@ engine/   diag, registry, cas, plugin    session, extension points, plugin loade
 input/    token, lexer, parser           text to expression tree
 eval/     simplify                       the pass pipeline
 output/   printer                        expression to text or tree dump
-app/      main.c                         command line and REPL
+app/      main.c, lineedit               command line, REPL, raw-mode line editor
 plugins/  arith, extra_ops               shipped plugins
 tests/    core, frontend and CLI tests
 docs/     PLUGINS.md

@@ -2,6 +2,7 @@
 #include "engine/plugin.h"
 #include "eval/simplify.h"
 #include "input/parser.h"
+#include "misc/arena.h"
 
 #include <dlfcn.h>
 #include <stdlib.h>
@@ -9,6 +10,8 @@
 
 #define DEFAULT_FLOAT_BITS 128
 #define DEFAULT_SCRATCH_RESERVE ((size_t)256 << 20)
+#define DEFAULT_HISTORY_ENTRIES 1000
+#define DEFAULT_HISTORY_LINE_MAX 512
 
 struct cas_defer_node {
     void (*fn)(void *);
@@ -16,7 +19,20 @@ struct cas_defer_node {
     cas_defer_node_t *next;
 };
 
-/** Allocates a session and sets up the scratch arena and the built-in fold pass. */
+/** Reserves the history arena and builds the ring in it. Returns -1 on failure or if the size overflows. */
+static int history_init(cas_t *cas)
+{
+    size_t entries = cas->opts.history_entries;
+    size_t line_max = cas->opts.history_line_max;
+
+    if (entries > SIZE_MAX / line_max)
+        return -1;
+    if (arena_init(&cas->history_arena, entries * line_max) != 0)
+        return -1;
+    return arena_ring_init(&cas->history, &cas->history_arena, line_max, entries);
+}
+
+/** Allocates a session and sets up the scratch and history arenas and the built-in passes. */
 cas_t *cas_new(const cas_options_t *opts)
 {
     cas_t *cas = calloc(1, sizeof(*cas));
@@ -29,13 +45,19 @@ cas_t *cas_new(const cas_options_t *opts)
         cas->opts.float_bits = DEFAULT_FLOAT_BITS;
     if (!cas->opts.scratch_reserve)
         cas->opts.scratch_reserve = DEFAULT_SCRATCH_RESERVE;
+    if (!cas->opts.history_entries)
+        cas->opts.history_entries = DEFAULT_HISTORY_ENTRIES;
+    if (!cas->opts.history_line_max)
+        cas->opts.history_line_max = DEFAULT_HISTORY_LINE_MAX;
 
     registry_init(&cas->reg);
     if (arena_init(&cas->scratch, cas->opts.scratch_reserve) != 0 ||
+        history_init(cas) != 0 ||
         registry_add_pass(cas, &pass_fold_constants) != CAS_OK ||
         registry_add_pass(cas, &pass_collect_assoc) != CAS_OK) {
         registry_destroy(&cas->reg);
         arena_destroy(&cas->scratch);
+        arena_destroy(&cas->history_arena);
         free(cas);
         return NULL;
     }
@@ -62,7 +84,44 @@ void cas_free(cas_t *cas)
     }
     free(cas->plugins);
     arena_destroy(&cas->scratch);
+    arena_destroy(&cas->history_arena);
     free(cas);
+}
+
+/** Copies the line into the next ring slot, dropping the oldest entry if full. */
+int cas_history_add(cas_t *cas, const char *line, size_t len)
+{
+    arena_ring_t *h = &cas->history;
+
+    if (len == 0 || len >= h->elem_size)
+        return -1;
+
+    if (h->len > 0) {
+        const char *newest = arena_ring_get(h, h->len - 1);
+        if (strncmp(newest, line, len) == 0 && newest[len] == '\0')
+            return 0;
+    }
+
+    char *slot = arena_ring_push_overwrite(h, NULL);
+    if (!slot)
+        return -1;
+    memcpy(slot, line, len);
+    slot[len] = '\0';
+    return 0;
+}
+
+/** Entries currently stored. */
+size_t cas_history_count(const cas_t *cas)
+{
+    return cas->history.len;
+}
+
+/** Counts back from the newest entry. */
+const char *cas_history_get(const cas_t *cas, size_t back)
+{
+    if (back >= cas->history.len)
+        return NULL;
+    return arena_ring_get(&cas->history, cas->history.len - 1 - back);
 }
 
 /** Bump-allocates from the scratch arena. */

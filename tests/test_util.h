@@ -64,7 +64,11 @@ void run_plugin_tests(void);
 
 /** Log level tests. */
 void run_log_tests(void);
+
 /** Tests for the constants plugin. */
 void run_constants_tests(void);
+
+/** REPL history tests. */
+void run_history_tests(void);
 
 #endif // TEST_UTIL_H

@@ -1,3 +1,4 @@
+#include "app/lineedit.h"
 #include "engine/cas.h"
 #include "engine/plugin.h"
 #include "output/printer.h"
@@ -87,21 +88,46 @@ static int run_line(cas_t *cas, const cli_t *cli, const char *src, size_t len)
     return rc;
 }
 
-/** Reads lines from stdin until EOF and evaluates each. Blank lines are skipped. */
+/**
+ * Reads lines until EOF and evaluates each. Blank lines are skipped. On a
+ * terminal the lines come from the line editor and are kept in the history;
+ * piped input is read as plain lines.
+ */
 static int run_repl(cas_t *cas, const cli_t *cli)
 {
     int interactive = isatty(STDIN_FILENO);
+    int editing = lineedit_available();
     char *line = NULL;
     size_t cap = 0;
 
+    if (editing) {
+        cap = cas->opts.history_line_max; // what is typed always fits a history slot
+        line = malloc(cap);
+        if (!line)
+            return EXIT_FAILURE;
+    }
+
     for (;;) {
-        if (interactive) {
-            fputs("> ", stdout);
-            fflush(stdout);
+        ssize_t n;
+        if (editing) {
+            size_t len = 0;
+            int rc = lineedit_read(cas, "> ", line, cap, &len);
+            if (rc < 0) {
+                editing = 0; // terminal refused raw mode, carry on with plain reads
+                continue;
+            }
+            if (rc == 0)
+                break;
+            n = (ssize_t)len;
+        } else {
+            if (interactive) {
+                fputs("> ", stdout);
+                fflush(stdout);
+            }
+            n = getline(&line, &cap, stdin);
+            if (n == -1)
+                break;
         }
-        ssize_t n = getline(&line, &cap, stdin);
-        if (n == -1)
-            break;
         while (n > 0 && (line[n - 1] == '\n' || line[n - 1] == '\r'))
             n--;
 
@@ -111,6 +137,8 @@ static int run_repl(cas_t *cas, const cli_t *cli)
         if (start == (size_t)n)
             continue; // blank line
 
+        if (editing)
+            cas_history_add(cas, line, (size_t)n);
         run_line(cas, cli, line, (size_t)n);
     }
     if (interactive)

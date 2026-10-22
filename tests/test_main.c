@@ -12,6 +12,7 @@ int main(void)
     run_plugin_tests();
     run_log_tests();
     run_constants_tests();
+    run_history_tests();
 
     if (test_failures) {
         printf("%d of %d checks failed\n", test_failures, test_checks);

@@ -14,6 +14,8 @@ typedef struct {
     size_t float_bits;      // float precision in bits (default 128)
     size_t scratch_reserve; // virtual bytes reserved for the scratch arena (default 256 MB)
     int verbosity;          // highest log_level_t to emit, 0 = quiet
+    size_t history_entries;  // lines the history keeps before the oldest is dropped (default 1000)
+    size_t history_line_max; // bytes per history line, terminator included (default 512)
 } cas_options_t;
 
 /** A loaded plugin. */
@@ -43,6 +45,8 @@ struct cas {
     cas_plugin_slot_t *plugins;
     size_t nplugins;
     size_t plugins_cap;
+    arena_t history_arena;
+    arena_ring_t history; // fixed-size NUL-terminated lines, newest last
 };
 
 /** What cas_eval produces for one line. */
@@ -62,6 +66,20 @@ void cas_free(cas_t *cas);
  * expressions stay valid until the next cas_scratch_reset.
  */
 cas_status_t cas_eval(cas_t *cas, const char *src, size_t len, cas_result_t *out);
+
+/**
+ * Remembers an input line for the REPL's recall. Returns -1 and stores nothing
+ * if the line is empty or does not fit a history slot (history_line_max), since
+ * a truncated entry would recall as a different line. Repeating the newest
+ * entry is accepted but not stored twice. The oldest entry is dropped when full.
+ */
+int cas_history_add(cas_t *cas, const char *line, size_t len);
+
+/** Number of lines in the history. */
+size_t cas_history_count(const cas_t *cas);
+
+/** The line `back` entries before the newest (0 = newest), or NULL if out of range. Valid until the next cas_history_add. */
+const char *cas_history_get(const cas_t *cas, size_t back);
 
 /** Allocates from the scratch arena. Reports an error and returns NULL when it is full. */
 void *cas_scratch_alloc(cas_t *cas, size_t size);

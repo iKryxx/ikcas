@@ -256,6 +256,102 @@ static inline void *arena_array_get(arena_array_t *arr, size_t idx)
     return (uint8_t *)arr->data + idx * arr->elem_size;
 }
 
+/**
+ * FIFO ring buffer of fixed capacity whose storage lives in an arena. It never
+ * grows, since moving elements would break the in-place rule arenas rely on.
+ */
+typedef struct {
+    arena_t *arena;
+    void    *data;
+    size_t   elem_size;
+    size_t   head;  // slot index of the oldest element
+    size_t   len;   // elements in use
+    size_t   cap;   // slots the storage has room for
+} arena_ring_t;
+
+/** Allocates room for cap elements. Returns -1 on failure, including cap == 0. */
+static inline int arena_ring_init(arena_ring_t *r, arena_t *a, size_t elem_size,
+                                  size_t cap)
+{
+    if (elem_size == 0 || cap == 0 || cap > SIZE_MAX / elem_size)
+        return -1;
+
+    void *p = arena_alloc(a, elem_size * cap);
+    if (!p)
+        return -1;
+
+    r->arena     = a;
+    r->data      = p;
+    r->elem_size = elem_size;
+    r->head      = 0;
+    r->len       = 0;
+    r->cap       = cap;
+    return 0;
+}
+
+/** Slot idx positions after head, wrapped. Caller guarantees idx <= cap. */
+static inline void *arena_ring_slot(const arena_ring_t *r, size_t idx)
+{
+    size_t pos = r->head + idx;
+    if (pos >= r->cap)
+        pos -= r->cap;
+    return (uint8_t *)r->data + pos * r->elem_size;
+}
+
+/** Appends a copy of elem (or an uninitialized slot if elem is NULL). Returns the slot, NULL if the ring is full. */
+static inline void *arena_ring_push(arena_ring_t *r, const void *elem)
+{
+    if (r->len == r->cap)
+        return NULL;
+
+    void *slot = arena_ring_slot(r, r->len);
+    if (elem)
+        memcpy(slot, elem, r->elem_size);
+    r->len++;
+    return slot;
+}
+
+/** Like arena_ring_push, but when the ring is full the oldest element is dropped to make room. */
+static inline void *arena_ring_push_overwrite(arena_ring_t *r, const void *elem)
+{
+    if (r->len == r->cap) {
+        r->head++;
+        if (r->head == r->cap)
+            r->head = 0;
+        r->len--;
+    }
+    return arena_ring_push(r, elem);
+}
+
+/** Removes the oldest element, copying it to out if out is not NULL. Returns -1 if the ring is empty. */
+static inline int arena_ring_pop(arena_ring_t *r, void *out)
+{
+    if (r->len == 0)
+        return -1;
+
+    if (out)
+        memcpy(out, arena_ring_slot(r, 0), r->elem_size);
+    r->head++;
+    if (r->head == r->cap)
+        r->head = 0;
+    r->len--;
+    return 0;
+}
+
+/** Pointer to element idx, counting from the oldest. Asserts that it is in range. */
+static inline void *arena_ring_get(const arena_ring_t *r, size_t idx)
+{
+    assert(idx < r->len && "arena_ring_get index out of bounds");
+    return arena_ring_slot(r, idx);
+}
+
+/** Drops all elements. The storage stays allocated. */
+static inline void arena_ring_clear(arena_ring_t *r)
+{
+    r->head = 0;
+    r->len  = 0;
+}
+
 /** Frees everything. Memory stays committed. */
 static inline void arena_reset(arena_t *a)
 {
