@@ -29,6 +29,7 @@ void registry_destroy(registry_t *r)
     vec_free(&r->literals);
     vec_free(&r->constants);
     vec_free(&r->passes);
+    vec_free(&r->display_passes);
 }
 
 /** Appends an entry, tagged with the plugin that is currently initializing ("core" if none). */
@@ -117,6 +118,12 @@ cas_status_t registry_add_constant(cas_t *cas, const constant_def_t *c)
 cas_status_t registry_add_pass(cas_t *cas, const pass_def_t *p)
 {
     return add_named(cas, &cas->reg.passes, p, "pass", p->name);
+}
+
+/** Registers a display pass. */
+cas_status_t registry_add_display_pass(cas_t *cas, const pass_def_t *p)
+{
+    return add_named(cas, &cas->reg.display_passes, p, "display pass", p->name);
 }
 
 /**

@@ -73,12 +73,28 @@ static expr_t *mul_one_pass(cas_t *cas, expr_t *root)
     return expr_map(cas, root, drop_one, (void *)registry_find_fn(cas, "mul", 3));
 }
 
+/** expr_map callback: renames the symbol "hello" to "HELLO". */
+static expr_t *shout_node(cas_t *cas, expr_t *e, void *user)
+{
+    (void)user;
+    if (e->kind == EXPR_SYMBOL && e->as.sym.len == 5 && memcmp(e->as.sym.name, "hello", 5) == 0)
+        return expr_new_symbol(cas, e->span, "HELLO", 5);
+    return e;
+}
+
+/** Display pass that shouts "hello". */
+static expr_t *shout_pass(cas_t *cas, expr_t *root)
+{
+    return expr_map(cas, root, shout_node, NULL);
+}
+
 static const fn_def_t fn_fact = { "fact", 1, 1, 0, fact_eval, NULL };
 static const op_def_t op_fact = { "!", FIX_POSTFIX, 50, ASSOC_LEFT, &fn_fact };
 static const constant_def_t const_answer = { "answer", answer_make };
 static const pass_def_t pass_mul_one = { "mul_one", mul_one_pass };
+static const pass_def_t pass_shout = { "shout", shout_pass };
 
-/** Registers factorial (as a postfix "!"), the constant "answer" and the mul_one pass. */
+/** Registers factorial (as a postfix "!"), the constant "answer", the mul_one pass and the shout display pass. */
 static cas_status_t demo_init(cas_t *cas)
 {
     cas_status_t st = registry_add_fn(cas, &fn_fact);
@@ -88,6 +104,8 @@ static cas_status_t demo_init(cas_t *cas)
         st = registry_add_constant(cas, &const_answer);
     if (st == CAS_OK)
         st = registry_add_pass(cas, &pass_mul_one);
+    if (st == CAS_OK)
+        st = registry_add_display_pass(cas, &pass_shout);
     return st;
 }
 
@@ -148,6 +166,13 @@ void run_plugin_tests(void)
         check_eval(cas, "2*x", "2 * x");
         check_eval(cas, "x*1*1", "x");
 
+        // display passes only change what is printed, the result stays as the simplifier left it
+        check_eval(cas, "hello", "HELLO");
+        check_eval(cas, "hello+1", "1 + HELLO");
+        char *canonical = test_canonical(cas, "hello");
+        CHECK_STR(canonical, "hello");
+        free(canonical);
+
         // rejected registrations leave a clear message
         CHECK(cas_register_plugin(cas, &ikcas_plugin_demo) == CAS_ERR_PLUGIN);
         cas->diags.len = 0;
@@ -157,6 +182,9 @@ void run_plugin_tests(void)
         cas->diags.len = 0;
         CHECK(cas_register_plugin(cas, &wrong_version) == CAS_ERR_PLUGIN);
         CHECK(cas->diags.len > 0 && strstr(cas->diags.items[0].msg, "API version") != NULL);
+        cas->diags.len = 0;
+        CHECK(registry_add_display_pass(cas, &pass_shout) == CAS_ERR_REGISTRY); // duplicate name
+        CHECK(cas->diags.len > 0 && strstr(cas->diags.items[0].msg, "display pass 'shout' already registered") != NULL);
         cas->diags.len = 0;
 
         // a failed plugin must not break what is already registered

@@ -31,6 +31,7 @@ typedef struct {
     reg_vec_t literals;
     reg_vec_t constants;
     reg_vec_t passes;
+    reg_vec_t display_passes; // run on a result just before it is printed
 } registry_t;
 
 /** Sets up an empty registry. */
@@ -59,6 +60,13 @@ cas_status_t registry_add_constant(cas_t *cas, const constant_def_t *c);
 
 /** Appends a pass to the pipeline. Passes run in registration order. */
 cas_status_t registry_add_pass(cas_t *cas, const pass_def_t *p);
+
+/**
+ * Appends a pass to the display pipeline. These run in registration order
+ * on a finished result and undo the canonical form for printing (a + -1*b
+ * back to a - b). They must not change what the expression means.
+ */
+cas_status_t registry_add_display_pass(cas_t *cas, const pass_def_t *p);
 
 /** Looks up a value type by name. NULL if unknown. */
 const value_type_t *registry_find_type(const cas_t *cas, const char *name);

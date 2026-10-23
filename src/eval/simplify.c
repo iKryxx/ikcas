@@ -124,6 +124,18 @@ static expr_t *collect_node(cas_t *cas, expr_t *e, void *user)
     return expr_new_apply(cas, e->span, fn, out, total);
 }
 
+/** Replaces one application with whatever its function's rewrite hook returns. Functions without a hook are kept. */
+static expr_t *rewrite_nodes(cas_t *cas, expr_t *e, void *user)
+{
+    (void)user;
+    if (e->kind != EXPR_APPLY)
+        return e;
+    const fn_rewrite_t fn = e->as.apply.fn->rewrite;
+    if (!fn)
+        return e;
+    return fn(cas, e);
+}
+
 /** Pass entry point: folds the whole tree bottom-up. */
 static expr_t *fold_constants(cas_t *cas, expr_t *root)
 {
@@ -135,8 +147,14 @@ static expr_t *collect_assoc(cas_t *cas, expr_t *root) {
     return expr_map(cas, root, collect_node, NULL);
 }
 
+/** Pass entry point: rewrites expressions with the initial goal to normalize the operator set */
+static expr_t *rewrite_expr(cas_t *cas, expr_t *root) {
+    return expr_map(cas, root, rewrite_nodes, NULL);
+}
+
 const pass_def_t pass_fold_constants = { "fold_constants", fold_constants };
 const pass_def_t pass_collect_assoc  = { "collect_assoc",  collect_assoc };
+const pass_def_t pass_rewrite_expr   = { "rewrite_expr",   rewrite_expr};
 
 /** Runs every registered pass in order, stopping at the first failure. */
 expr_t *cas_simplify(cas_t *cas, expr_t *root)
@@ -145,6 +163,18 @@ expr_t *cas_simplify(cas_t *cas, expr_t *root)
     for (size_t i = 0; i < passes->len && root; i++) {
         const pass_def_t *p = passes->data[i].def;
         CAS_LOG(cas, LOG_DEBUG, "pass %s", p->name);
+        root = p->run(cas, root);
+    }
+    return root;
+}
+
+/** Runs every registered display pass in order, stopping at the first failure. */
+expr_t *cas_present(cas_t *cas, expr_t *root)
+{
+    const reg_vec_t *passes = &cas->reg.display_passes;
+    for (size_t i = 0; i < passes->len && root; i++) {
+        const pass_def_t *p = passes->data[i].def;
+        CAS_LOG(cas, LOG_DEBUG, "display pass %s", p->name);
         root = p->run(cas, root);
     }
     return root;

@@ -10,6 +10,14 @@ static void check_eval(cas_t *cas, const char *src, const char *want)
     free(got);
 }
 
+/** Evaluates src and compares the canonical form (no display passes) with the expected text. */
+static void check_canonical(cas_t *cas, const char *src, const char *want)
+{
+    char *got = test_canonical(cas, src);
+    CHECK_STR(got, want);
+    free(got);
+}
+
 /** Integers, exact fractions, errors, symbols, the numeric tower, extra_ops. */
 void run_eval_tests(void)
 {
@@ -62,6 +70,37 @@ void run_eval_tests(void)
     check_eval(cas, "1/2*x", "(1/2) * x");
     check_eval(cas, "-x", "-x");
     check_eval(cas, "-(1+2)*x", "(-3) * x");
+
+    // subtraction is add(a, -b) inside the engine, and the display pass brings it back
+    check_eval(cas, "x-y", "x - y");
+    check_eval(cas, "x-3", "x - 3");
+    check_eval(cas, "3-x", "3 - x");
+    check_eval(cas, "x-1/2", "x - (1/2)");
+    check_eval(cas, "x-2*y", "x - 2 * y");
+    check_eval(cas, "x-y*z", "x - y * z");
+    check_eval(cas, "a-b-c", "a - b - c");
+    check_eval(cas, "a+b-c+d", "a + b - c + d");
+    check_eval(cas, "a-(b-c)", "a - (b - c)");
+    check_eval(cas, "x+y", "x + y"); // nothing to undo
+    check_eval(cas, "x-1/0", "error: division by zero");
+    check_eval(cas, "x+float(-1)*y", "x - 1 * y"); // a float coefficient is kept, it decides the result type
+
+    // the engine itself works on the canonical form
+    check_canonical(cas, "x-y", "x + (-1) * y");
+    check_canonical(cas, "a-b-c", "a + (-1) * b + (-1) * c");
+    check_canonical(cas, "x+y", "x + y");
+
+    // printing the canonical form and parsing it again gives the same canonical form
+    const char *round_trip[] = { "x-y", "x-3", "3-x", "x-2*y", "a-b-c", "a+b-c+d", "a-(b-c)", "x-1/2", "x-y*z" };
+    for (size_t i = 0; i < sizeof(round_trip) / sizeof(*round_trip); i++) {
+        char *shown = test_eval(cas, round_trip[i]);
+        char *before = test_canonical(cas, round_trip[i]);
+        char *after = test_canonical(cas, shown);
+        CHECK_STR(after, before);
+        free(before);
+        free(after);
+        free(shown);
+    }
 
     // the numeric tower: floats absorb ints and rationals
     char *half = test_eval(cas, "float(1/2)");

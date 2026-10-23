@@ -71,15 +71,16 @@ static void render_diags(const cas_t *cas, const char *src, size_t len)
 static int run_line(cas_t *cas, const cli_t *cli, const char *src, size_t len)
 {
     cas_result_t res;
+    expr_t *shown = NULL;
     int rc = 0;
 
-    if (cas_eval(cas, src, len, &res) != CAS_OK) {
+    if (cas_eval(cas, src, len, &res) != CAS_OK || !(shown = cas_present(cas, res.result))) {
         render_diags(cas, src, len);
         rc = 1;
     } else {
         if (cli->show_ast)
             expr_print_tree(cas, res.tree, stdout);
-        char *text = expr_to_str(cas, res.result);
+        char *text = expr_to_str(cas, shown);
         printf("eval: %s\n", text ? text : "(out of memory)");
         fflush(stdout); // keeps stdout and stderr in order when both are piped
         free(text);

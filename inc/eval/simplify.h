@@ -21,6 +21,14 @@ extern const pass_def_t pass_fold_constants;
  */
 extern const pass_def_t pass_collect_assoc;
 
+/**
+ * The third pass the engine ships. It doesn't do much on its own. It calls every rewrite hook that
+ * is non null. In case of the arithmetic plugin, it aims to normalize the operator set by rewriting
+ * sub(a, b) to add(a, neg(b)) or div(a, b) to mul(a, pow(b, -1)) so the tree just becomes a collection
+ * of add, mul, neg and pow nodes
+ */
+extern const pass_def_t pass_rewrite_expr;
+
 // cas_simplify (engine/cas.h) runs all registered passes in order.
 
 #endif // SIMPLIFY_H

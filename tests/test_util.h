@@ -47,6 +47,9 @@ char *test_eval(cas_t *cas, const char *src);
 /** Like test_eval, but prints the parse tree before simplification. */
 char *test_parse(cas_t *cas, const char *src);
 
+/** Like test_eval, but skips the display passes, so it shows the canonical form (x - y as x + (-1) * y). */
+char *test_canonical(cas_t *cas, const char *src);
+
 /** Status code of evaluating src. */
 cas_status_t test_status(cas_t *cas, const char *src);
 

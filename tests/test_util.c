@@ -28,15 +28,26 @@ static char *render_first_diag(cas_t *cas)
     return strdup(buf);
 }
 
-/** Evaluates src and prints the tree or the result, then resets the scratch arena. */
-static char *eval_with(cas_t *cas, const char *src, int want_tree)
+/** Which tree eval_with prints. */
+typedef enum {
+    SHOW_DISPLAY,   // the result after the display passes
+    SHOW_TREE,      // the parse tree
+    SHOW_CANONICAL, // the result before the display passes
+} show_t;
+
+/** Evaluates src and prints the chosen tree, then resets the scratch arena. */
+static char *eval_with(cas_t *cas, const char *src, show_t show)
 {
     cas_result_t res;
     char *out;
-    if (cas_eval(cas, src, strlen(src), &res) != CAS_OK)
+    expr_t *shown = NULL;
+    if (cas_eval(cas, src, strlen(src), &res) != CAS_OK ||
+        !(shown = show == SHOW_TREE        ? res.tree
+                  : show == SHOW_CANONICAL ? res.result
+                                           : cas_present(cas, res.result)))
         out = cas->diags.len ? render_first_diag(cas) : strdup("error: (no diagnostic)");
     else
-        out = expr_to_str(cas, want_tree ? res.tree : res.result);
+        out = expr_to_str(cas, shown);
     cas_scratch_reset(cas);
     return out;
 }
@@ -44,13 +55,19 @@ static char *eval_with(cas_t *cas, const char *src, int want_tree)
 /** Result text of evaluating src. */
 char *test_eval(cas_t *cas, const char *src)
 {
-    return eval_with(cas, src, 0);
+    return eval_with(cas, src, SHOW_DISPLAY);
 }
 
 /** Text of the unsimplified parse tree. */
 char *test_parse(cas_t *cas, const char *src)
 {
-    return eval_with(cas, src, 1);
+    return eval_with(cas, src, SHOW_TREE);
+}
+
+/** Text of the simplified result as the passes leave it, without the display passes. */
+char *test_canonical(cas_t *cas, const char *src)
+{
+    return eval_with(cas, src, SHOW_CANONICAL);
 }
 
 /** Status of evaluating src. */

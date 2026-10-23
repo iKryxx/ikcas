@@ -96,4 +96,11 @@ void cas_scratch_reset(cas_t *cas);
 /** Runs all registered passes over root. Returns NULL on failure. */
 expr_t *cas_simplify(cas_t *cas, expr_t *root);
 
+/**
+ * Runs the display passes over a simplified result. The result of cas_eval
+ * stays canonical (that is what history and later passes should see); only
+ * the returned tree is meant for expr_to_str. Returns NULL on failure.
+ */
+expr_t *cas_present(cas_t *cas, expr_t *root);
+
 #endif // CAS_H
