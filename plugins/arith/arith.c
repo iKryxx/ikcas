@@ -355,10 +355,24 @@ static int is_minus_one(const expr_t *e)
            bignum_cmp_mag(&e->as.value.as.i, &bignum_one) == 0;
 }
 
+/** True if e is the int constant 1. */
+static int is_one(const expr_t *e)
+{
+    return expr_is_const(e) && arith_is_int(&e->as.value) && e->as.value.as.i.sign > 0 &&
+           bignum_cmp_mag(&e->as.value.as.i, &bignum_one) == 0;
+}
+
+/** True if e is div(1, x). That is how a power with a negative exponent looks once it is displayed. */
+static int is_reciprocal(const expr_t *e)
+{
+    return expr_is_apply_of(e, &fn_div) && is_one(e->as.apply.args[0]);
+}
+
 /**
- * True if e reads as a negative term: a negative constant, neg(x), or a
- * product that starts with one of those. The product pass runs first, so
- * -1*x has already become neg(x) by the time a sum looks at it.
+ * True if e reads as a negative term: a negative constant, neg(x), a product
+ * that starts with one of those, or a quotient with such a numerator. The
+ * product pass runs first, so -1*x has already become neg(x) by the time a
+ * sum looks at it.
  */
 static int is_negative_term(const expr_t *e)
 {
@@ -366,6 +380,8 @@ static int is_negative_term(const expr_t *e)
         return arith_sign(&e->as.value) < 0;
     if (expr_is_apply_of(e, &fn_neg))
         return 1;
+    if (expr_is_apply_of(e, &fn_div))
+        return is_negative_term(e->as.apply.args[0]);
     if (!expr_is_apply_of(e, &fn_mul))
         return 0;
     const expr_t *first = e->as.apply.args[0];
@@ -374,7 +390,7 @@ static int is_negative_term(const expr_t *e)
 
 /**
  * The positive counterpart of a negative term: -3 gives 3, neg(x) gives x,
- * neg(x)*y gives x*y and -2*x gives 2*x. A float coefficient stays
+ * neg(x)*y gives x*y, -2*x gives 2*x and neg(x)/y gives x/y. A float coefficient stays
  * (-1.0*x gives 1.0*x), since it decides the type of the result.
  */
 static expr_t *flip_sign(cas_t *cas, span_t span, expr_t *e)
@@ -383,6 +399,13 @@ static expr_t *flip_sign(cas_t *cas, span_t span, expr_t *e)
         return negate_const(cas, span, e);
     if (expr_is_apply_of(e, &fn_neg))
         return e->as.apply.args[0];
+    if (expr_is_apply_of(e, &fn_div)) {
+        expr_t *num = flip_sign(cas, span, e->as.apply.args[0]);
+        if (!num)
+            return NULL;
+        expr_t *operands[] = { num, e->as.apply.args[1] };
+        return expr_new_apply(cas, span, &fn_div, operands, 2);
+    }
 
     expr_t *const *args = e->as.apply.args;
     size_t n = e->as.apply.nargs;
@@ -456,18 +479,21 @@ static expr_t *display_sum(cas_t *cas, expr_t *e)
 }
 
 /**
- * Turns mul(-1, x, y) into mul(neg(x), y) and mul(-1, x) into neg(x), which
- * prints as -x * y and -x. Any other coefficient, a float -1.0 included, stays.
+ * The factors as one expression, with a leading -1 shown as a minus sign:
+ * [-1, x, y] gives -x * y, [-1] gives -1 and no factors give 1.
  */
-static expr_t *display_product(cas_t *cas, expr_t *e)
+static expr_t *product_expr(cas_t *cas, span_t span, expr_t *const *factors, size_t n)
 {
-    expr_t *const *args = e->as.apply.args;
-    size_t n = e->as.apply.nargs;
-    if (!is_minus_one(args[0]))
-        return e;
+    if (n == 0)
+        return int_const(cas, span, 1);
+    if (!is_minus_one(factors[0]))
+        return n == 1 ? factors[0] : expr_new_apply(cas, span, &fn_mul, factors, n);
 
-    expr_t *first = expr_new_apply(cas, e->span, &fn_neg, &args[1], 1);
-    if (!first || n == 2)
+    expr_t *first = n == 1 ? int_const(cas, span, 1) : factors[1];
+    if (!first)
+        return NULL;
+    first = expr_new_apply(cas, span, &fn_neg, &first, 1);
+    if (!first || n <= 2)
         return first;
 
     expr_t **out = cas_scratch_alloc(cas, (n - 1) * sizeof(*out));
@@ -475,14 +501,81 @@ static expr_t *display_product(cas_t *cas, expr_t *e)
         return NULL;
     out[0] = first;
     for (size_t i = 2; i < n; i++)
-        out[i - 1] = args[i];
-    return expr_new_apply(cas, e->span, &fn_mul, out, n - 1);
+        out[i - 1] = factors[i];
+    return expr_new_apply(cas, span, &fn_mul, out, n - 1);
 }
 
-/** Display callback: products first (expr_map is bottom-up), then the sums around them. */
+/**
+ * Splits a product into numerator and denominator. The factors that are
+ * div(1, x) (negative powers, already displayed) go below the line, so
+ * mul(x, 1/y, 1/z) becomes x / (y * z). A leading -1 becomes a minus sign
+ * (mul(-1, x) is -x), any other coefficient, a float -1.0 included, stays.
+ */
+static expr_t *display_product(cas_t *cas, expr_t *e)
+{
+    expr_t *const *args = e->as.apply.args;
+    size_t n = e->as.apply.nargs;
+    size_t below = 0;
+    for (size_t i = 0; i < n; i++)
+        below += is_reciprocal(args[i]);
+    if (!below && !is_minus_one(args[0]))
+        return e;
+
+    expr_t **top = cas_scratch_alloc(cas, n * sizeof(*top));
+    expr_t **bottom = cas_scratch_alloc(cas, n * sizeof(*bottom));
+    if (!top || !bottom)
+        return NULL;
+    size_t nt = 0, nb = 0;
+    for (size_t i = 0; i < n; i++) {
+        if (is_reciprocal(args[i]))
+            bottom[nb++] = args[i]->as.apply.args[1];
+        else
+            top[nt++] = args[i];
+    }
+
+    expr_t *num = product_expr(cas, e->span, top, nt);
+    if (!num || !nb)
+        return num;
+    expr_t *den = nb == 1 ? bottom[0] : expr_new_apply(cas, e->span, &fn_mul, bottom, nb);
+    if (!den)
+        return NULL;
+    expr_t *operands[] = { num, den };
+    return expr_new_apply(cas, e->span, &fn_div, operands, 2);
+}
+
+/**
+ * Turns a power with a negative constant exponent into a reciprocal: x^-1 is
+ * 1/x and x^-2 is 1/x^2. Products pick these up next, to put them below
+ * the line.
+ */
+static expr_t *display_power(cas_t *cas, expr_t *e)
+{
+    expr_t *base = e->as.apply.args[0];
+    expr_t *exp = e->as.apply.args[1];
+    if (!expr_is_const(exp) || arith_sign(&exp->as.value) >= 0)
+        return e;
+
+    expr_t *below = base;
+    if (!is_minus_one(exp)) {
+        expr_t *positive = negate_const(cas, e->span, exp);
+        if (!positive)
+            return NULL;
+        expr_t *operands[] = { base, positive };
+        below = expr_new_apply(cas, e->span, &fn_pow, operands, 2);
+    }
+    expr_t *one = below ? int_const(cas, e->span, 1) : NULL;
+    if (!one)
+        return NULL;
+    expr_t *operands[] = { one, below };
+    return expr_new_apply(cas, e->span, &fn_div, operands, 2);
+}
+
+/** Display callback. expr_map is bottom-up, so powers become reciprocals before the product around them splits, and sums see the finished terms. */
 static expr_t *display_node(cas_t *cas, expr_t *e, void *user)
 {
     (void)user;
+    if (expr_is_apply_of(e, &fn_pow))
+        return display_power(cas, e);
     if (expr_is_apply_of(e, &fn_mul))
         return display_product(cas, e);
     if (expr_is_apply_of(e, &fn_add))
@@ -490,7 +583,7 @@ static expr_t *display_node(cas_t *cas, expr_t *e, void *user)
     return e;
 }
 
-/** Display pass entry point: shows negative terms as subtractions and a -1 factor as a minus sign. */
+/** Display pass entry point: shows negative terms as subtractions, a -1 factor as a minus sign and negative powers as quotients. */
 static expr_t *arith_display(cas_t *cas, expr_t *root)
 {
     return expr_map(cas, root, display_node, NULL);

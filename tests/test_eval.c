@@ -107,6 +107,30 @@ void run_eval_tests(void)
     check_eval(cas, "float(2)/3", "0.66666666666666666666666666666666666666"); // folded as one division, not 2 * (1/3)
     CHECK(test_status(cas, "x/0") == CAS_ERR_DOMAIN);
 
+    // negative powers are shown below the line
+    check_eval(cas, "x/y", "x / y");
+    check_eval(cas, "1/y", "1 / y");
+    check_eval(cas, "2/x", "2 / x");
+    check_eval(cas, "x*y/z", "x * y / z");
+    check_eval(cas, "x/y/z", "x / (y * z)");
+    check_eval(cas, "x/(y*z)", "x / (y * z)");
+    check_eval(cas, "1/(x*y)", "1 / (x * y)");
+    check_eval(cas, "x/y^2", "x / y ^ 2");
+    check_eval(cas, "x/(y+z)", "x / (y + z)");
+    check_eval(cas, "(x+y)/z", "(x + y) / z");
+    check_eval(cas, "x^-1", "1 / x");
+    check_eval(cas, "x^-2", "1 / x ^ 2");
+    check_eval(cas, "x^(-1/2)", "1 / x ^ (1/2)");
+    check_eval(cas, "(x/y)^2", "(x / y) ^ 2");
+    check_eval(cas, "-x/y", "-x / y");
+    check_eval(cas, "-1/y", "-1 / y");
+    check_eval(cas, "x/-y", "x / -y");
+    check_eval(cas, "x/2/y", "(1/2) * x / y"); // a numeric coefficient stays in front
+    check_eval(cas, "a/b+c/d", "a / b + c / d");
+    check_eval(cas, "a-b/c", "a - b / c");
+    check_eval(cas, "-x/y+z", "z - x / y");
+    check_eval(cas, "x/y-z/w", "x / y - z / w");
+
     // the engine itself works on the canonical form
     check_canonical(cas, "x-y", "x + (-1) * y");
     check_canonical(cas, "a-b-c", "a + (-1) * b + (-1) * c");
@@ -122,9 +146,11 @@ void run_eval_tests(void)
     check_canonical(cas, "2/x", "2 * x ^ (-1)");
 
     // printing the canonical form and parsing it again gives the same canonical form
-    // (not for -x+y: it prints as y - x, and the terms have no canonical order yet)
+    // (not for -x+y: it prints as y - x, and the terms have no canonical order yet. Nor for
+    // x/y/z: it prints as x / (y * z), and (y*z)^-1 is not split into y^-1 * z^-1 yet)
     const char *round_trip[] = { "x-y", "x-3", "3-x", "x-2*y", "a-b-c", "a+b-c+d", "a-(b-c)", "x-1/2", "x-y*z",
-                                  "-x", "-x*y", "-x-y", "-(x+y)", "x+-y", "x/2", "x/y", "x/y/z", "2/x" };
+                                  "-x", "-x*y", "-x-y", "-(x+y)", "x+-y", "x/2", "x/y", "2/x", "-x/y",
+                                  "x*y/z", "x/y-z/w", "a-b/c", "x/y+z" };
     for (size_t i = 0; i < sizeof(round_trip) / sizeof(*round_trip); i++) {
         char *shown = test_eval(cas, round_trip[i]);
         char *before = test_canonical(cas, round_trip[i]);

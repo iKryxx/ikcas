@@ -129,7 +129,8 @@ A constant operand is negated or inverted directly (`x - 3` is `x + -3`,
 `x / 2` is `(1/2) * x`), which keeps `division by zero` as the error and
 rounds a float divisor once. The parse tree (`--ast`) still has `sub`, `div`
 and `neg`. `arith` registers a display pass that turns the canonical form back
-into `a - b` and `-a` when a result is printed; `cas_eval` itself returns the
+into `a - b`, `-a` and `a / b` (factors with a negative exponent go below the
+line, `x * y^-1 * z^-1` is `x / (y * z)`) when a result is printed; `cas_eval` itself returns the
 canonical tree. A plugin that adds rules should expect only `add`, `mul` and
 `pow` after `rewrite_expr` has run.
 
