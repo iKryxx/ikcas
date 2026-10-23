@@ -5,7 +5,7 @@
 #include "expr/value.h"
 
 // The arithmetic plugin: the numeric tower int < rational < float, integer
-// literals, + - * / and prefix -, and float(). Other plugins can build on
+// literals, + - * / ^ and prefix -, and float(). Other plugins can build on
 // its value types with the helpers below.
 
 #ifndef IKCAS_PLUGIN_SHARED

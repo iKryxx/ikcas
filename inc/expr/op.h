@@ -28,7 +28,11 @@ enum {
  */
 typedef cas_status_t (*fn_eval_t)(cas_t *cas, const value_t *args, size_t nargs, value_t *out);
 
-/** Optional simplification hook. Returns a replacement for the application. */
+/**
+ * Optional simplification hook, called by the rewrite_expr pass on every application of the
+ * function (children first). Returns a replacement, the node itself to keep it, or NULL after
+ * reporting an error.
+ */
 typedef expr_t *(*fn_rewrite_t)(cas_t *cas, expr_t *apply);
 
 /**
@@ -86,8 +90,9 @@ typedef struct {
 } constant_def_t;
 
 /**
- * One step of the simplification pipeline. A pass must not modify the tree
- * it gets. It returns a new root, or the same one if nothing changed.
+ * One step of the simplification pipeline, or of the display pipeline that
+ * runs on a finished result before it is printed. A pass must not modify the
+ * tree it gets. It returns a new root, or the same one if nothing changed.
  */
 typedef struct {
     const char *name;

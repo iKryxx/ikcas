@@ -22,10 +22,13 @@ extern const pass_def_t pass_fold_constants;
 extern const pass_def_t pass_collect_assoc;
 
 /**
- * The third pass the engine ships. It doesn't do much on its own. It calls every rewrite hook that
- * is non null. In case of the arithmetic plugin, it aims to normalize the operator set by rewriting
- * sub(a, b) to add(a, neg(b)) or div(a, b) to mul(a, pow(b, -1)) so the tree just becomes a collection
- * of add, mul, neg and pow nodes
+ * The third pass the engine ships. It doesn't do much on its own: it calls the rewrite hook of every
+ * function that has one. The arithmetic plugin uses this to normalize the operator set:
+ * sub(a, b) becomes add(a, mul(-1, b)), div(a, b) becomes mul(a, pow(b, -1)) and neg(a) becomes
+ * mul(-1, a), so what is left is a tree of add, mul and pow. A constant operand is negated or
+ * inverted directly instead. It runs after fold_constants, so the hooks only see applications that
+ * still have a symbol in them, and errors like division by zero are reported by the fold.
+ * The display passes (cas_present) undo this for printing.
  */
 extern const pass_def_t pass_rewrite_expr;
 

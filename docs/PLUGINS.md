@@ -20,7 +20,7 @@ static cas_status_t my_init(cas_t *cas)
 IKCAS_PLUGIN(my_plugin, "1.0", my_init, NULL /* shutdown */);
 ```
 
-`plugins/extra_ops/extra_ops.c` is a complete small example (`^` and `abs`).
+`plugins/extra_ops/extra_ops.c` is a complete small example (`abs`).
 `tests/test_plugin.c` shows a postfix operator, a constant and a rewrite pass.
 
 ## What can be registered
@@ -32,7 +32,8 @@ IKCAS_PLUGIN(my_plugin, "1.0", my_init, NULL /* shutdown */);
 | `registry_add_op` | `op_def_t` | Syntax for a function: symbol, prefix/infix/postfix, precedence, associativity. |
 | `registry_add_literal` | `literal_def_t` | Number syntax: `match` returns the length of a literal at the cursor, `make` builds the value. Longest match wins. |
 | `registry_add_constant` | `constant_def_t` | A named value such as `pi`. |
-| `registry_add_pass` | `pass_def_t` | A step of the simplification pipeline. Passes run in registration order; `fold_constants` is first, then comes `collect_assoc` and so on. |
+| `registry_add_pass` | `pass_def_t` | A step of the simplification pipeline. Passes run in registration order; the built-in ones are `fold_constants`, `rewrite_expr` (calls the `rewrite` hooks) and `collect_assoc`, and plugin passes come after them. |
+| `registry_add_display_pass` | `pass_def_t` | A step that runs on a finished result just before it is printed (`cas_present`). It undoes the canonical form, e.g. `a + (-1)*b` back to `a - b`. The result `cas_eval` returns stays canonical. |
 
 Operators never touch the parser: it reads binding powers from the registry.
 A higher `precedence` binds tighter. Current levels: `+ -` 10, `* /` 20,
@@ -113,6 +114,25 @@ arguments are only evaluated when the level is enabled. Log lines are separate
 from error diagnostics: they never end up in `cas->diags`. An embedder sets
 `cas_options_t.verbosity` and may redirect output with `cas_set_log_sink`.
 
+## Canonical form
+
+`arith` keeps the engine to three functions: `add`, `mul` and `pow`. The
+`rewrite` hooks of `sub`, `div` and `neg` replace them during simplification:
+
+| Input | Canonical |
+| --- | --- |
+| `a - b` | `a + (-1) * b` |
+| `-a` | `(-1) * a` |
+| `a / b` | `a * b ^ -1` |
+
+A constant operand is negated or inverted directly (`x - 3` is `x + -3`,
+`x / 2` is `(1/2) * x`), which keeps `division by zero` as the error and
+rounds a float divisor once. The parse tree (`--ast`) still has `sub`, `div`
+and `neg`. `arith` registers a display pass that turns the canonical form back
+into `a - b` and `-a` when a result is printed; `cas_eval` itself returns the
+canonical tree. A plugin that adds rules should expect only `add`, `mul` and
+`pow` after `rewrite_expr` has run.
+
 ## Where symbolic work goes
 
 The expression tree and the pass pipeline are the extension points for
@@ -120,7 +140,8 @@ simplification:
 
 * write a `pass_def_t` that rewrites with `expr_map` (collect like terms,
   canonical ordering, expansion);
-* give a `fn_def_t` a `rewrite` hook and `attrs` (`FN_COMMUTATIVE`,
-  `FN_ASSOCIATIVE`) for a generic pass to use;
+* give a `fn_def_t` a `rewrite` hook, which the built-in `rewrite_expr` pass
+  calls bottom-up on every application of that function, and `attrs`
+  (`FN_COMMUTATIVE`, `FN_ASSOCIATIVE`) for generic passes to use;
 * add a value type (complex numbers, matrices) with a higher `rank` and
   `promote_from`; `+ - * /` then work on it through `value_arith`.

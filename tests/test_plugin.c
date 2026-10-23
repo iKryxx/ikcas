@@ -205,12 +205,11 @@ void run_plugin_tests(void)
     // the same plugin code as a shared object
     {
         cas_t *cas = test_new_cas(0);
-        check_eval(cas, "2^10", "error: unknown token '^'"); // not loaded yet
+        check_eval(cas, "abs(-3)", "error: unknown function 'abs'"); // not loaded yet
         CHECK(cas_load_plugin(cas, EXTRA_OPS_SO) == CAS_OK);
-        check_eval(cas, "2^10", "1024");
-        check_eval(cas, "2^3^2", "512");
+        check_eval(cas, "abs(-3)", "3");
         check_eval(cas, "abs(-3)+2^-1", "7/2");
-        check_eval(cas, "x^2", "x ^ 2");
+        check_eval(cas, "abs(float(-1/2))", "0.5");
 
         CHECK(cas_load_plugin(cas, EXTRA_OPS_SO) == CAS_ERR_PLUGIN); // already loaded
         cas->diags.len = 0;

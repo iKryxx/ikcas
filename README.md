@@ -158,11 +158,14 @@ From highest to lowest precedence:
 
 | Operator | Meaning | Associativity |
 | --- | --- | --- |
+| `x^y` | Power | right |
 | `-x` | Negation | prefix |
 | `*` `/` | Multiply, divide | left |
 | `+` `-` | Add, subtract | left |
 
-Division is exact. `7/2` is the fraction `7/2`, not `3`. The `extra_ops` plugin adds `^` (see [Plugins](#plugins)).
+Division is exact. `7/2` is the fraction `7/2`, not `3`.
+
+`^` takes an int exponent. With an int or rational base the result is exact (`(2/3)^-2` is `9/4`), with a float base it is a float (`float(1/2)^2` is `0.25`). `^` binds tighter than prefix minus, so `-2^2` is `-4`. Rational and float exponents (`2^(1/2)`) are an error for now.
 
 ### Functions
 
@@ -210,8 +213,8 @@ Three plugins ship with the repository:
 
 | Plugin | Provides | Integrated |
 | --- | --- | --- |
-| `arith` | int, rational and float types, integer literals, `+ - * /`, prefix `-`, `float()`. | Yes |
-| `extra_ops` | Right-associative `^` (int or rational base, int exponent) and `abs()`. An example of a third-party plugin. | No |
+| `arith` | int, rational and float types, integer literals, `+ - * / ^`, prefix `-`, `float()`. | Yes |
+| `extra_ops` | `abs()`. An example of a third-party plugin. | No |
 | `constants` | Mathematical constants like `pi` | Yes |
 
 > Note: Be careful with editing the order of integrated plugins as that could break the program. It is also not recommended to exclude
@@ -234,8 +237,8 @@ Any plugin directory also builds as a shared object:
 
 ```sh
 make plugin-extra_ops
-./ikcas -p build/plugins/extra_ops.so -e '2^100'
-eval: 1267650600228229401496703205376
+./ikcas -p build/plugins/extra_ops.so -e 'abs(-7/2)'
+eval: 7/2
 ```
 
 ```sh
@@ -270,16 +273,17 @@ IKCAS_PLUGIN(my_plugin, "1.0", my_init, NULL);
 For one line of input:
 
 ```
-text -> lexer -> parser -> expression tree -> simplification passes -> result
+text -> lexer -> parser -> expression tree -> simplification passes -> result -> display passes -> text
 ```
 
 - The lexer and parser read operators, binding powers, number syntax, functions and constants from the registry.
 - Every operator application is an application of a function, and syntax is attached to it separately. That is what lets passes work on operators and calls the same way.
 - Expressions are immutable. Passes build new trees, so the parse tree is still there after simplification.
-- The one pass that ships folds constant subtrees. With symbols present it folds what it can, so `2*3*x` becomes `6 * x`.
+- Constant subtrees are folded. With symbols present it folds what it can, so `2*3*x` becomes `6 * x`.
+- Inside the engine there is no subtraction, division or negation: `a - b` is `a + (-1)*b`, `a / b` is `a * b^-1` and `-a` is `-1 * a`, so rules only deal with `+`, `*` and `^`. The `arith` plugin does this through the `rewrite` hooks of `sub`, `div` and `neg`, and a display pass turns the result back into the text you would write.
 - Values are tagged, with a rank that orders the numeric tower. Plugins can add their own types.
 
-Symbolic work (collecting terms, reordering, expansion) is meant to slot in as new passes or per-function rewrite hooks.
+Symbolic work (collecting terms, reordering, expansion) slots in as new passes or per-function rewrite hooks.
 
 ---
 

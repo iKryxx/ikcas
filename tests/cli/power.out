@@ -1,0 +1,15 @@
+eval: 1024
+eval: 512
+eval: -4
+eval: 4
+eval: 1/4
+eval: 9/4
+error: zero to a negative power
+  0^-1
+  ^^^^
+eval: 0.25
+eval: 0.125
+error: ^ needs a number base and an int exponent
+  2^(1/2)
+  ^^^^^^
+eval: x ^ 2
