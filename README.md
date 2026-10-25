@@ -177,7 +177,7 @@ Parentheses group, and function arguments are separated by commas.
 
 ### Symbols
 
-A name that isn't a registered function or constant is a symbol. Constant parts around it still fold, but nothing is simplified beyond that yet:
+A name that isn't a registered function or constant is a symbol.
 
 ```
 > 2*3*x
@@ -185,7 +185,7 @@ eval: 6 * x
 > x*2*3
 eval: 6 * x
 > x - x
-eval: x - x
+eval: 0
 ```
 
 ### Errors

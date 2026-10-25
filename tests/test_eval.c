@@ -64,9 +64,9 @@ void run_eval_tests(void)
     check_eval(cas, "x+1", "1 + x"); // a lone constant still moves to the front
     check_eval(cas, "2*x*3*y*5", "30 * x * y");
     check_eval(cas, "(x+1)+(2+y)+3", "6 + x + y"); // nested sums are flattened
-    check_eval(cas, "x+x", "x + x");
+    check_eval(cas, "x+x", "2 * x");
     check_eval(cas, "1/0*x*2", "error: division by zero");
-    check_eval(cas, "x-x", "x - x");
+    check_eval(cas, "x-x", "0");
     check_eval(cas, "1/2*x", "(1/2) * x");
     check_eval(cas, "-x", "-x");
     check_eval(cas, "-(1+2)*x", "(-3) * x");

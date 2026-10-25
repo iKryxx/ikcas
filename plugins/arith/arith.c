@@ -164,10 +164,81 @@ static expr_t *drop_args(cas_t *cas, expr_t *e, int (*drop)(const expr_t *), int
     return kept == 1 ? out[0] : expr_new_apply(cas, e->span, e->as.apply.fn, out, kept);
 }
 
-/** Identity rule for add: a zero term can go (x + 0 = x). */
+/**
+ * Splits a term of a sum into its numeric coefficient and the rest, for
+ * collecting like terms: 3*x*y gives (3, x*y), x gives (1, x) and -1*x gives
+ * (-1, x). Returns the coefficient as a constant node and stores the rest in
+ * *rest. NULL on error.
+ */
+static expr_t *split_term(cas_t *cas, expr_t *term, expr_t **rest)
+{
+    if (expr_is_apply_of(term, &fn_mul) && expr_is_const(term->as.apply.args[0])) {
+        if (term->as.apply.nargs == 2)
+            *rest = term->as.apply.args[1];
+        else
+            *rest = expr_new_apply(cas, term->span, &fn_mul, &term->as.apply.args[1], term->as.apply.nargs - 1);
+        return term->as.apply.args[0]; 
+    } else {
+        *rest = term;
+        return int_const(cas, term->span, 1);
+    }
+}
+
+/** Applies identity rules and collapses like terms (x + 0) -> (x), (x + x) -> (2 * x) */
 static expr_t *fn_add_rewrite(cas_t *cas, expr_t *e)
 {
-    return drop_args(cas, e, is_zero, 0);
+    expr_t *out = drop_args(cas, e, is_zero, 0);
+    if (!out || !expr_is_apply_of(out, &fn_add))
+        return out;
+
+    size_t n = out->as.apply.nargs;
+    expr_t **rests = cas_scratch_alloc(cas, n * sizeof(*rests)); // group key: x * y e.g.
+    expr_t **coefs = cas_scratch_alloc(cas, n * sizeof(*coefs)); // coefficient nodes
+    if (!rests || !coefs)
+        return NULL;
+
+    size_t ngroups = 0;
+    int merged = 0;
+
+    for (size_t i = 0; i < n; i++) {
+        expr_t *arg = out->as.apply.args[i];
+        expr_t *r;
+        expr_t *coef = split_term(cas, arg, &r);
+        if (!coef || !r)
+            return NULL;
+        size_t g_idx = 0;
+        while (g_idx < ngroups && !expr_equal(r, rests[g_idx])) {
+            g_idx++;
+        }
+
+        if (g_idx == ngroups) {
+            coefs[g_idx] = coef;
+            rests[g_idx] = r;
+            ngroups++;
+        }
+        else {
+            value_t sum;
+
+            if (value_arith(cas, VOP_ADD, &sum, &coefs[g_idx]->as.value, &coef->as.value) != CAS_OK) 
+                return NULL;
+            if (!(coefs[g_idx] = expr_new_const(cas, e->span, sum)))
+                return NULL;
+            merged = 1;
+        } 
+    }
+
+    if (!merged) 
+        return out;
+
+    expr_t **terms = cas_scratch_alloc(cas, ngroups * sizeof(*terms));
+    if (!terms)
+        return NULL;
+    for (size_t g_idx = 0; g_idx < ngroups; g_idx++) {
+        expr_t *p_terms[] = { coefs[g_idx], rests[g_idx]};
+        if(!(terms[g_idx] = expr_new_apply(cas, e->span, &fn_mul, p_terms, 2)))
+            return NULL;
+    }
+    return ngroups == 1 ? terms[0] : expr_new_apply(cas, e->span, &fn_add, terms, ngroups);
 }
 
 /** sub(a, b). */
