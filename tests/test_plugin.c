@@ -47,30 +47,29 @@ static cas_status_t answer_make(cas_t *cas, value_t *out)
     return st;
 }
 
-/** True if e is the int constant 1. */
-static int is_int_one(const expr_t *e)
+/** True if e is the int constant 2. */
+static int is_int_two(const expr_t *e)
 {
-    return expr_is_const(e) && arith_is_int(&e->as.value) && bignum_cmp(&e->as.value.as.i, &bignum_one) == 0;
+    return expr_is_const(e) && arith_is_int(&e->as.value) && e->as.value.as.i.len == 1 &&
+           e->as.value.as.i.sign > 0 && e->as.value.as.i.limb[0] == 2;
 }
 
-/** expr_map callback: rewrites x*1 and 1*x to x. */
-static expr_t *drop_one(cas_t *cas, expr_t *e, void *user)
+/** expr_map callback: rewrites x^2 to x*x. */
+static expr_t *square_node(cas_t *cas, expr_t *e, void *user)
 {
-    (void)cas;
+    const fn_def_t *pow = registry_find_fn(cas, "pow", 3);
     const fn_def_t *mul = user;
-    if (!expr_is_apply_of(e, mul) || e->as.apply.nargs != 2)
+    if (!expr_is_apply_of(e, pow) || !is_int_two(e->as.apply.args[1]))
         return e;
-    if (is_int_one(e->as.apply.args[1]))
-        return e->as.apply.args[0];
-    if (is_int_one(e->as.apply.args[0]))
-        return e->as.apply.args[1];
-    return e;
+    expr_t *x = e->as.apply.args[0];
+    expr_t *factors[] = { x, x };
+    return expr_new_apply(cas, e->span, mul, factors, 2);
 }
 
-/** Pass that removes multiplications by 1. */
-static expr_t *mul_one_pass(cas_t *cas, expr_t *root)
+/** Pass that writes squares as products. arith has no rule for this. */
+static expr_t *square_pass(cas_t *cas, expr_t *root)
 {
-    return expr_map(cas, root, drop_one, (void *)registry_find_fn(cas, "mul", 3));
+    return expr_map(cas, root, square_node, (void *)registry_find_fn(cas, "mul", 3));
 }
 
 /** expr_map callback: renames the symbol "hello" to "HELLO". */
@@ -91,10 +90,10 @@ static expr_t *shout_pass(cas_t *cas, expr_t *root)
 static const fn_def_t fn_fact = { "fact", 1, 1, 0, fact_eval, NULL };
 static const op_def_t op_fact = { "!", FIX_POSTFIX, 50, ASSOC_LEFT, &fn_fact };
 static const constant_def_t const_answer = { "answer", answer_make };
-static const pass_def_t pass_mul_one = { "mul_one", mul_one_pass };
+static const pass_def_t pass_square = { "square", square_pass };
 static const pass_def_t pass_shout = { "shout", shout_pass };
 
-/** Registers factorial (as a postfix "!"), the constant "answer", the mul_one pass and the shout display pass. */
+/** Registers factorial (as a postfix "!"), the constant "answer", the square pass and the shout display pass. */
 static cas_status_t demo_init(cas_t *cas)
 {
     cas_status_t st = registry_add_fn(cas, &fn_fact);
@@ -103,7 +102,7 @@ static cas_status_t demo_init(cas_t *cas)
     if (st == CAS_OK)
         st = registry_add_constant(cas, &const_answer);
     if (st == CAS_OK)
-        st = registry_add_pass(cas, &pass_mul_one);
+        st = registry_add_pass(cas, &pass_square);
     if (st == CAS_OK)
         st = registry_add_display_pass(cas, &pass_shout);
     return st;
@@ -144,6 +143,53 @@ static cas_status_t bad_op_init(cas_t *cas)
 }
 IKCAS_PLUGIN(bad_op, "1", bad_op_init, NULL);
 
+// Plugins that watch the pass pipeline.
+
+static int counter_runs;
+static int churn_runs;
+static int unstable_notes;
+
+/** Pass that counts how often the pipeline reaches it and changes nothing. */
+static expr_t *counter_pass(cas_t *cas, expr_t *root)
+{
+    (void)cas;
+    counter_runs++;
+    return root;
+}
+
+/** Pass that never settles: it returns a fresh copy every time. */
+static expr_t *churn_pass(cas_t *cas, expr_t *root)
+{
+    churn_runs++;
+    return expr_clone(cas, root);
+}
+
+static const pass_def_t pass_counter = { "counter", counter_pass };
+static const pass_def_t pass_churn = { "churn", churn_pass };
+
+/** Registers the counting pass. */
+static cas_status_t counter_init(cas_t *cas)
+{
+    return registry_add_pass(cas, &pass_counter);
+}
+IKCAS_PLUGIN(counter, "1", counter_init, NULL);
+
+/** Registers the pass that never settles. */
+static cas_status_t churn_init(cas_t *cas)
+{
+    return registry_add_pass(cas, &pass_churn);
+}
+IKCAS_PLUGIN(churn, "1", churn_init, NULL);
+
+/** Log sink that counts the "no stable form" notes. */
+static void note_sink(void *user, log_level_t level, const char *msg)
+{
+    (void)user;
+    (void)level;
+    if (strstr(msg, "no stable form") != NULL)
+        unstable_notes++;
+}
+
 /** Static registration, rejections, operator validation, loading the shared object. */
 void run_plugin_tests(void)
 {
@@ -161,10 +207,11 @@ void run_plugin_tests(void)
         check_eval(cas, "0-1!", "-1");
         check_eval(cas, "(0-1)!", "error: factorial needs a small non-negative int");
         // The pass runs after folding, so it only sees what is still symbolic.
-        check_eval(cas, "x*1", "x");
-        check_eval(cas, "1*x", "x");
+        check_eval(cas, "x^2", "x * x");
+        check_eval(cas, "x^3", "x ^ 3");
+        check_eval(cas, "(x+1)^2", "(1 + x) * (1 + x)");
+        check_eval(cas, "2^2*x", "4 * x"); // folded before the pass sees it
         check_eval(cas, "2*x", "2 * x");
-        check_eval(cas, "x*1*1", "x");
 
         // display passes only change what is printed, the result stays as the simplifier left it
         check_eval(cas, "hello", "HELLO");
@@ -193,6 +240,37 @@ void run_plugin_tests(void)
         int before = demo_shutdowns;
         cas_free(cas);
         CHECK(demo_shutdowns == before + 1);
+    }
+
+    // the pipeline repeats until a round changes nothing
+    {
+        cas_t *cas = test_new_cas(0);
+        CHECK(cas_register_plugin(cas, &ikcas_plugin_counter) == CAS_OK);
+        counter_runs = 0;
+        check_eval(cas, "x", "x");
+        CHECK(counter_runs == 1); // nothing to rewrite, so the first round is already stable
+        counter_runs = 0;
+        check_eval(cas, "x-y", "x - y");
+        CHECK(counter_runs == 2); // sub is rewritten in round 0, round 1 changes nothing
+        counter_runs = 0;
+        check_eval(cas, "2*x*(1/2)*y", "x * y");
+        CHECK(counter_runs == 3); // round 0 folds 2 * 1/2 into a 1, round 1 drops it, round 2 changes nothing
+        cas_free(cas);
+    }
+
+    // a pass that never settles ends at simplify_max_rounds, with a note
+    {
+        cas_options_t opts = { .verbosity = LOG_INFO, .simplify_max_rounds = 3 };
+        cas_t *cas = cas_new(&opts);
+        cas_set_log_sink(cas, note_sink, NULL);
+        CHECK(cas_register_plugin(cas, &ikcas_plugin_arith) == CAS_OK);
+        CHECK(cas_register_plugin(cas, &ikcas_plugin_churn) == CAS_OK);
+        churn_runs = 0;
+        unstable_notes = 0;
+        check_eval(cas, "x-y", "x - y"); // the result is still right
+        CHECK(churn_runs == 3);
+        CHECK(unstable_notes == 1);
+        cas_free(cas);
     }
 
     // operator validation

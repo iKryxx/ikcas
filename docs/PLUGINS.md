@@ -32,7 +32,7 @@ IKCAS_PLUGIN(my_plugin, "1.0", my_init, NULL /* shutdown */);
 | `registry_add_op` | `op_def_t` | Syntax for a function: symbol, prefix/infix/postfix, precedence, associativity. |
 | `registry_add_literal` | `literal_def_t` | Number syntax: `match` returns the length of a literal at the cursor, `make` builds the value. Longest match wins. |
 | `registry_add_constant` | `constant_def_t` | A named value such as `pi`. |
-| `registry_add_pass` | `pass_def_t` | A step of the simplification pipeline. Passes run in registration order; the built-in ones are `fold_constants`, `rewrite_expr` (calls the `rewrite` hooks) and `collect_assoc`, and plugin passes come after them. |
+| `registry_add_pass` | `pass_def_t` | A step of the simplification pipeline. Passes run in registration order, and the whole pipeline repeats until nothing changes; the built-in ones are `fold_constants`, `rewrite_expr` (calls the `rewrite` hooks) and `collect_assoc`, and plugin passes come after them. |
 | `registry_add_display_pass` | `pass_def_t` | A step that runs on a finished result just before it is printed (`cas_present`). It undoes the canonical form, e.g. `a + (-1)*b` back to `a - b`. The result `cas_eval` returns stays canonical. |
 
 Operators never touch the parser: it reads binding powers from the registry.
@@ -58,6 +58,13 @@ passes pattern-match on.
   reset.
 * Passes must not modify the tree they receive. Use `expr_map` (bottom-up
   rewrite) and the `expr_new_*` constructors; unchanged subtrees are shared.
+* The pass pipeline repeats until a whole round returns the same root, so a
+  pass (and a `rewrite` hook) must return the node it was given when nothing
+  applies, never an equal copy. A pipeline that does not settle is cut off
+  after `cas_options_t.simplify_max_rounds` rounds (default 8) with an info
+  log line, and the last tree is the result.
+* A `rewrite` hook of a variadic function sees all its arguments, not just the
+  first two: `collect_assoc` flattens `a*b*c` into one application.
 * Descriptors are stored by pointer: keep them `static const` (or otherwise
   alive until `cas_free`).
 
@@ -133,6 +140,14 @@ into `a - b`, `-a` and `a / b` (factors with a negative exponent go below the
 line, `x * y^-1 * z^-1` is `x / (y * z)`) when a result is printed; `cas_eval` itself returns the
 canonical tree. A plugin that adds rules should expect only `add`, `mul` and
 `pow` after `rewrite_expr` has run.
+
+The same hooks carry the identity rules: a `0` term drops out of `add`, a `1`
+factor drops out of `mul`, a `0` factor makes the product `0`, and `x^1`,
+`x^0` and `1^x` become `x`, `1` and `1`. Only the exact int constants count.
+A float `1.0` or `0.0` stays, since it decides the type of the result, and
+`0^x` stays because `x` may be negative. Rules like these often apply only
+after another pass has folded constants (`2*x*(1/2)*y` has a `1` in it after
+`collect_assoc`), which is why the pipeline repeats.
 
 ## Where symbolic work goes
 

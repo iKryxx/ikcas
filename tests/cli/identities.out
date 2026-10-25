@@ -1,0 +1,10 @@
+eval: x
+eval: x + y
+eval: x
+eval: 0
+eval: x + y
+eval: x
+eval: 1
+eval: x * y
+eval: x + y
+eval: x

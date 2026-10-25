@@ -16,6 +16,7 @@ typedef struct {
     int verbosity;          // highest log_level_t to emit, 0 = quiet
     size_t history_entries;  // lines the history keeps before the oldest is dropped (default 1000)
     size_t history_line_max; // bytes per history line, terminator included (default 512)
+    size_t simplify_max_rounds; // rounds of the pass pipeline before cas_simplify gives up on a stable form (default 8)
 } cas_options_t;
 
 /** A loaded plugin. */
@@ -93,7 +94,10 @@ cas_status_t cas_defer(cas_t *cas, void (*fn)(void *), void *ptr);
 /** Runs the deferred cleanups and frees everything allocated since the last reset, diagnostics included. */
 void cas_scratch_reset(cas_t *cas);
 
-/** Runs all registered passes over root. Returns NULL on failure. */
+/**
+ * Runs all registered passes over root, repeating the whole pipeline until it
+ * changes nothing or simplify_max_rounds is used up. Returns NULL on failure.
+ */
 expr_t *cas_simplify(cas_t *cas, expr_t *root);
 
 /**

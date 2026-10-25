@@ -156,15 +156,30 @@ const pass_def_t pass_fold_constants = { "fold_constants", fold_constants };
 const pass_def_t pass_collect_assoc  = { "collect_assoc",  collect_assoc };
 const pass_def_t pass_rewrite_expr   = { "rewrite_expr",   rewrite_expr};
 
-/** Runs every registered pass in order, stopping at the first failure. */
+/**
+ * Runs the registered passes in order, again and again until a whole round
+ * leaves the root unchanged (passes return the same node when they change
+ * nothing) or simplify_max_rounds is reached. Stops at the first failure.
+ */
 expr_t *cas_simplify(cas_t *cas, expr_t *root)
 {
-    const reg_vec_t *passes = &cas->reg.passes;
-    for (size_t i = 0; i < passes->len && root; i++) {
-        const pass_def_t *p = passes->data[i].def;
-        CAS_LOG(cas, LOG_DEBUG, "pass %s", p->name);
-        root = p->run(cas, root);
+    int found_stable = 0;
+    for (size_t round = 0; round < cas->opts.simplify_max_rounds && root; round++) {
+        CAS_LOG(cas, LOG_DEBUG, "round %zu", round);
+        expr_t *before = root;
+        const reg_vec_t *passes = &cas->reg.passes;
+        for (size_t i = 0; i < passes->len && root; i++) {
+            const pass_def_t *p = passes->data[i].def;
+            CAS_LOG(cas, LOG_DEBUG, "pass %s", p->name);
+            root = p->run(cas, root);
+        }
+        if (root == before) {
+            found_stable = 1;
+            break;
+        }
     }
+    if (root && !found_stable)
+        CAS_LOG(cas, LOG_INFO, "no stable form after %zu rounds, keeping the last one", cas->opts.simplify_max_rounds);
     return root;
 }
 

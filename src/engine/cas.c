@@ -12,6 +12,7 @@
 #define DEFAULT_SCRATCH_RESERVE ((size_t)256 << 20)
 #define DEFAULT_HISTORY_ENTRIES 1000
 #define DEFAULT_HISTORY_LINE_MAX 512
+#define DEFAULT_SIMPLIFY_MAX_ROUNDS 8
 
 struct cas_defer_node {
     void (*fn)(void *);
@@ -49,6 +50,8 @@ cas_t *cas_new(const cas_options_t *opts)
         cas->opts.history_entries = DEFAULT_HISTORY_ENTRIES;
     if (!cas->opts.history_line_max)
         cas->opts.history_line_max = DEFAULT_HISTORY_LINE_MAX;
+    if (!cas->opts.simplify_max_rounds)
+        cas->opts.simplify_max_rounds = DEFAULT_SIMPLIFY_MAX_ROUNDS;
 
     registry_init(&cas->reg);
     if (arena_init(&cas->scratch, cas->opts.scratch_reserve) != 0 ||

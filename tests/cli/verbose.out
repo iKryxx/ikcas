@@ -26,8 +26,13 @@
 [info] loaded plugin 'constants' 1.0 (built in)
 [info] eval '1/2+x'
 [debug] parsed
+[debug] round 0
 [debug] pass fold_constants
 [debug] fold div(1, 2) -> 1/2
+[debug] pass rewrite_expr
+[debug] pass collect_assoc
+[debug] round 1
+[debug] pass fold_constants
 [debug] pass rewrite_expr
 [debug] pass collect_assoc
 [debug] display pass arith_display

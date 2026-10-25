@@ -22,7 +22,7 @@ extern const pass_def_t pass_fold_constants;
 extern const pass_def_t pass_collect_assoc;
 
 /**
- * The third pass the engine ships. It doesn't do much on its own: it calls the rewrite hook of every
+ * The rewrite pass the engine ships, between fold_constants and collect_assoc. It doesn't do much on its own: it calls the rewrite hook of every
  * function that has one. The arithmetic plugin uses this to normalize the operator set:
  * sub(a, b) becomes add(a, mul(-1, b)), div(a, b) becomes mul(a, pow(b, -1)) and neg(a) becomes
  * mul(-1, a), so what is left is a tree of add, mul and pow. A constant operand is negated or
@@ -32,6 +32,6 @@ extern const pass_def_t pass_collect_assoc;
  */
 extern const pass_def_t pass_rewrite_expr;
 
-// cas_simplify (engine/cas.h) runs all registered passes in order.
+// cas_simplify (engine/cas.h) runs all registered passes in order, and again until a round changes nothing.
 
 #endif // SIMPLIFY_H

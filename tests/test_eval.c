@@ -161,6 +161,33 @@ void run_eval_tests(void)
         free(shown);
     }
 
+    // identity rules: 0 and 1 drop out, x^1 and x^0 are simple, and they apply after folding too
+    check_eval(cas, "1*x", "x");
+    check_eval(cas, "x*1*1", "x");
+    check_eval(cas, "0*x", "0");
+    check_eval(cas, "x*y*0", "0");
+    check_eval(cas, "x+0", "x");
+    check_eval(cas, "0+x", "x");
+    check_eval(cas, "x+0+y", "x + y");
+    check_eval(cas, "x^1", "x");
+    check_eval(cas, "x^0", "1");
+    check_eval(cas, "1^x", "1");
+    check_eval(cas, "0^x", "0 ^ x"); // x may be negative
+    check_eval(cas, "(x*1)^1", "x");
+    check_eval(cas, "--x", "x");
+    check_eval(cas, "x--y", "x + y");
+    check_eval(cas, "0/x", "0"); // 0 * x^-1, like most CAS systems
+    check_eval(cas, "x+1+y-1", "x + y"); // the 0 appears only after the constants are folded, with 3 terms left
+    check_eval(cas, "x+(-2)+2", "x");
+    check_eval(cas, "x+0*-1", "x"); // a zero that came out of a negative factor
+    check_eval(cas, "2*x*(1/2)*y", "x * y"); // the 1 appears only after folding, and y must survive
+    check_eval(cas, "2*x*(1/2)*y*z", "x * y * z");
+    check_eval(cas, "x*(1/2)*2", "x");
+    check_eval(cas, "float(1)*x", "1 * x"); // a float 1 is not dropped, it decides the type
+    check_eval(cas, "x+float(0)", "0 + x");
+    check_canonical(cas, "--x", "x");
+    check_canonical(cas, "x*1+0", "x");
+
     // the numeric tower: floats absorb ints and rationals
     char *half = test_eval(cas, "float(1/2)");
     CHECK_STR(half, "0.5");

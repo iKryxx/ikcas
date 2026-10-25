@@ -80,6 +80,32 @@ static expr_t *negated(cas_t *cas, span_t span, expr_t *b)
     return expr_new_apply(cas, span, &fn_mul, factors, 2);
 }
 
+/** True if e is the int constant -1. A float -1.0 is not, it decides the type of a product. */
+static int is_minus_one(const expr_t *e)
+{
+    return expr_is_const(e) && arith_is_int(&e->as.value) && e->as.value.as.i.sign < 0 &&
+           bignum_cmp_mag(&e->as.value.as.i, &bignum_one) == 0;
+}
+
+/** True if e is the int constant 1. */
+static int is_one(const expr_t *e)
+{
+    return expr_is_const(e) && arith_is_int(&e->as.value) && e->as.value.as.i.sign > 0 &&
+           bignum_cmp_mag(&e->as.value.as.i, &bignum_one) == 0;
+}
+
+/** True if e is the int constant 0. Whatever sign a zero carries does not matter. */
+static int is_zero(const expr_t *e)
+{
+    return expr_is_const(e) && arith_is_int(&e->as.value) && bignum_is_zero(&e->as.value.as.i);
+}
+
+/** True if e is div(1, x). That is how a power with a negative exponent looks once it is displayed. */
+static int is_reciprocal(const expr_t *e)
+{
+    return expr_is_apply_of(e, &fn_div) && is_one(e->as.apply.args[0]);
+}
+
 // functions
 
 /**
@@ -108,6 +134,42 @@ static cas_status_t fn_add_eval(cas_t *cas, const value_t *args, size_t n, value
     return fold_arith(cas, VOP_ADD, args, n, out);
 }
 
+/**
+ * Removes the arguments of a variadic application that drop() accepts. Returns
+ * e itself if there are none, the one argument that is left, or the constant
+ * empty if nothing is left. Otherwise it builds a new application of the same
+ * function. Arguments can be 3 or more by now (collect_assoc flattens), so
+ * looking at the first two is not enough.
+ */
+static expr_t *drop_args(cas_t *cas, expr_t *e, int (*drop)(const expr_t *), int64_t empty)
+{
+    expr_t *const *args = e->as.apply.args;
+    size_t n = e->as.apply.nargs;
+    size_t kept = 0;
+    for (size_t i = 0; i < n; i++)
+        kept += !drop(args[i]);
+    if (kept == n)
+        return e;
+    if (kept == 0)
+        return int_const(cas, e->span, empty);
+
+    expr_t **out = cas_scratch_alloc(cas, kept * sizeof(*out));
+    if (!out)
+        return NULL;
+    size_t k = 0;
+    for (size_t i = 0; i < n; i++) {
+        if (!drop(args[i]))
+            out[k++] = args[i];
+    }
+    return kept == 1 ? out[0] : expr_new_apply(cas, e->span, e->as.apply.fn, out, kept);
+}
+
+/** Identity rule for add: a zero term can go (x + 0 = x). */
+static expr_t *fn_add_rewrite(cas_t *cas, expr_t *e)
+{
+    return drop_args(cas, e, is_zero, 0);
+}
+
 /** sub(a, b). */
 static cas_status_t fn_sub_eval(cas_t *cas, const value_t *args, size_t n, value_t *out)
 {
@@ -131,6 +193,20 @@ static expr_t *fn_sub_rewrite(cas_t *cas, expr_t *e)
 static cas_status_t fn_mul_eval(cas_t *cas, const value_t *args, size_t n, value_t *out)
 {
     return fold_arith(cas, VOP_MUL, args, n, out);
+}
+
+/**
+ * Identity rules for mul: a factor of 1 can go (x * 1 = x), and a factor of 0
+ * makes the whole product 0, also when another factor could be 0 or a
+ * division by it (0 * y^-1 is 0).
+ */
+static expr_t *fn_mul_rewrite(cas_t *cas, expr_t *e)
+{
+    for (size_t i = 0; i < e->as.apply.nargs; i++) {
+        if (is_zero(e->as.apply.args[i]))
+            return int_const(cas, e->span, 0);
+    }
+    return drop_args(cas, e, is_one, 1);
 }
 
 /** div(a, b). */
@@ -318,6 +394,21 @@ static cas_status_t fn_pow_eval(cas_t *cas, const value_t *args, size_t n, value
     return exact_pow(cas, base, e, negative, out);
 }
 
+/**
+ * Identity rules for pow: x^1 = x, x^0 = 1 and 1^x = 1.
+ */
+static expr_t *fn_pow_rewrite(cas_t *cas, expr_t *e)
+{
+    expr_t *base = e->as.apply.args[0];
+    expr_t *exp = e->as.apply.args[1];
+
+    if (is_one(exp))
+        return base;
+    if (is_one(base) || is_zero(exp))
+        return int_const(cas, e->span, 1);
+    return e;
+}
+
 /** neg(a). */
 static cas_status_t fn_neg_eval(cas_t *cas, const value_t *args, size_t n, value_t *out)
 {
@@ -338,35 +429,15 @@ static cas_status_t fn_float_eval(cas_t *cas, const value_t *args, size_t n, val
     return value_convert(cas, out, &args[0], &arith_type_float);
 }
 
-static const fn_def_t fn_add = { "add", 2, FN_VARIADIC, FN_COMMUTATIVE | FN_ASSOCIATIVE, fn_add_eval, NULL };
+static const fn_def_t fn_add = { "add", 2, FN_VARIADIC, FN_COMMUTATIVE | FN_ASSOCIATIVE, fn_add_eval, fn_add_rewrite };
 static const fn_def_t fn_sub = { "sub", 2, 2, 0, fn_sub_eval, fn_sub_rewrite };
-static const fn_def_t fn_mul = { "mul", 2, FN_VARIADIC, FN_COMMUTATIVE | FN_ASSOCIATIVE, fn_mul_eval, NULL };
+static const fn_def_t fn_mul = { "mul", 2, FN_VARIADIC, FN_COMMUTATIVE | FN_ASSOCIATIVE, fn_mul_eval, fn_mul_rewrite };
 static const fn_def_t fn_div = { "div", 2, 2, 0, fn_div_eval, fn_div_rewrite };
 static const fn_def_t fn_neg = { "neg", 1, 1, 0, fn_neg_eval, fn_neg_rewrite };
-static const fn_def_t fn_pow = { "pow", 2, 2, 0, fn_pow_eval, NULL };
+static const fn_def_t fn_pow = { "pow", 2, 2, 0, fn_pow_eval, fn_pow_rewrite };
 static const fn_def_t fn_float = { "float", 1, 1, 0, fn_float_eval, NULL };
 
 // display
-
-/** True if e is the int constant -1. A float -1.0 is not, it decides the type of a product. */
-static int is_minus_one(const expr_t *e)
-{
-    return expr_is_const(e) && arith_is_int(&e->as.value) && e->as.value.as.i.sign < 0 &&
-           bignum_cmp_mag(&e->as.value.as.i, &bignum_one) == 0;
-}
-
-/** True if e is the int constant 1. */
-static int is_one(const expr_t *e)
-{
-    return expr_is_const(e) && arith_is_int(&e->as.value) && e->as.value.as.i.sign > 0 &&
-           bignum_cmp_mag(&e->as.value.as.i, &bignum_one) == 0;
-}
-
-/** True if e is div(1, x). That is how a power with a negative exponent looks once it is displayed. */
-static int is_reciprocal(const expr_t *e)
-{
-    return expr_is_apply_of(e, &fn_div) && is_one(e->as.apply.args[0]);
-}
 
 /**
  * True if e reads as a negative term: a negative constant, neg(x), a product
