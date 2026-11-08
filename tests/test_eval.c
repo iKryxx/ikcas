@@ -188,6 +188,36 @@ void run_eval_tests(void)
     check_canonical(cas, "--x", "x");
     check_canonical(cas, "x*1+0", "x");
 
+    // like terms: equal parts after the coefficient merge and their coefficients add
+    check_eval(cas, "x+x", "2 * x");
+    check_eval(cas, "x+x+x+x", "4 * x");
+    check_eval(cas, "3*x+x", "4 * x");
+    check_eval(cas, "x+y", "x + y");
+    check_eval(cas, "-x-x", "(-2) * x");
+    check_eval(cas, "2*x*y+x*y", "3 * x * y"); // the part after the coefficient has several factors
+    check_eval(cas, "x+x+3", "3 + 2 * x"); // a constant term is kept
+    check_eval(cas, "2*x+3*y+x-y", "3 * x + 2 * y"); // two groups in one sum
+    check_eval(cas, "1/2*x+x", "(3/2) * x");
+    check_eval(cas, "x+2*x-3*x", "0"); // the coefficient 0 makes the product 0, then add drops it
+    check_eval(cas, "x*y+y*x", "x * y + y * x"); // not merged yet: no canonical order of factors
+
+    // like factors: equal bases merge and their exponents add
+    check_eval(cas, "x*x", "x ^ 2");
+    check_eval(cas, "x^2*x", "x ^ 3");
+    check_eval(cas, "x*x^-1", "1");
+    check_eval(cas, "2*x/x", "2");
+    check_eval(cas, "x/y*y", "x");
+    check_eval(cas, "x^a*x^b", "x ^ (a + b)"); // a symbolic exponent sum stays symbolic
+    check_eval(cas, "x*y", "x * y");
+    check_eval(cas, "2*x*x", "2 * x ^ 2");
+    check_eval(cas, "3*x*y*x", "3 * x ^ 2 * y");
+    check_eval(cas, "2*x*3*x", "6 * x ^ 2");
+    check_eval(cas, "2*2^x", "2 * 2 ^ x"); // the coefficient is not a base
+    check_eval(cas, "3*x*x+x^2", "4 * x ^ 2"); // collected factors, then collected terms
+    check_eval(cas, "x^2/x^2", "x ^ 2 / x ^ 2"); // not merged yet: (x^2)^-1 is not x^-2
+    check_canonical(cas, "x/x", "1");
+    check_canonical(cas, "x*x/x", "x");
+
     // the numeric tower: floats absorb ints and rationals
     char *half = test_eval(cas, "float(1/2)");
     CHECK_STR(half, "0.5");

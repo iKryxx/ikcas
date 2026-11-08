@@ -1,0 +1,14 @@
+eval: 2 * x
+eval: 4 * x
+eval: 0
+eval: 3 * x * y
+eval: 3 + 2 * x
+eval: 3 * x + 2 * y
+eval: x * y + y * x
+eval: x ^ 2
+eval: x ^ 3
+eval: 2
+eval: x ^ (a + b)
+eval: 2 * x ^ 2
+eval: 2 * 2 ^ x
+eval: 4 * x ^ 2

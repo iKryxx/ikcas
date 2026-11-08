@@ -170,17 +170,33 @@ static expr_t *drop_args(cas_t *cas, expr_t *e, int (*drop)(const expr_t *), int
  * (-1, x). Returns the coefficient as a constant node and stores the rest in
  * *rest. NULL on error.
  */
-static expr_t *split_term(cas_t *cas, expr_t *term, expr_t **rest)
+static expr_t *sum_split_term(cas_t *cas, expr_t *term, expr_t **rest)
 {
     if (expr_is_apply_of(term, &fn_mul) && expr_is_const(term->as.apply.args[0])) {
         if (term->as.apply.nargs == 2)
             *rest = term->as.apply.args[1];
         else
             *rest = expr_new_apply(cas, term->span, &fn_mul, &term->as.apply.args[1], term->as.apply.nargs - 1);
-        return term->as.apply.args[0]; 
+        return term->as.apply.args[0];
     } else {
         *rest = term;
         return int_const(cas, term->span, 1);
+    }
+}
+
+/**
+ * Splits a factor of a product into its base and exponent, for collecting
+ * like factors: x^2 gives (x, 2), x gives (x, 1) and x^a gives (x, a).
+ * Returns the base and stores the exponent in *exponent. NULL on error.
+ */
+static expr_t *product_split_term(cas_t *cas, expr_t *term, expr_t **exponent)
+{
+    if (expr_is_apply_of(term, &fn_pow)) {
+        *exponent = term->as.apply.args[1];
+        return term->as.apply.args[0];
+    } else {
+        *exponent = int_const(cas, term->span, 1);
+        return term;
     }
 }
 
@@ -203,7 +219,7 @@ static expr_t *fn_add_rewrite(cas_t *cas, expr_t *e)
     for (size_t i = 0; i < n; i++) {
         expr_t *arg = out->as.apply.args[i];
         expr_t *r;
-        expr_t *coef = split_term(cas, arg, &r);
+        expr_t *coef = sum_split_term(cas, arg, &r);
         if (!coef || !r)
             return NULL;
         size_t g_idx = 0;
@@ -219,15 +235,15 @@ static expr_t *fn_add_rewrite(cas_t *cas, expr_t *e)
         else {
             value_t sum;
 
-            if (value_arith(cas, VOP_ADD, &sum, &coefs[g_idx]->as.value, &coef->as.value) != CAS_OK) 
+            if (value_arith(cas, VOP_ADD, &sum, &coefs[g_idx]->as.value, &coef->as.value) != CAS_OK)
                 return NULL;
             if (!(coefs[g_idx] = expr_new_const(cas, e->span, sum)))
                 return NULL;
             merged = 1;
-        } 
+        }
     }
 
-    if (!merged) 
+    if (!merged)
         return out;
 
     expr_t **terms = cas_scratch_alloc(cas, ngroups * sizeof(*terms));
@@ -235,7 +251,7 @@ static expr_t *fn_add_rewrite(cas_t *cas, expr_t *e)
         return NULL;
     for (size_t g_idx = 0; g_idx < ngroups; g_idx++) {
         expr_t *p_terms[] = { coefs[g_idx], rests[g_idx]};
-        if(!(terms[g_idx] = expr_new_apply(cas, e->span, &fn_mul, p_terms, 2)))
+        if (!(terms[g_idx] = expr_new_apply(cas, e->span, &fn_mul, p_terms, 2)))
             return NULL;
     }
     return ngroups == 1 ? terms[0] : expr_new_apply(cas, e->span, &fn_add, terms, ngroups);
@@ -269,7 +285,10 @@ static cas_status_t fn_mul_eval(cas_t *cas, const value_t *args, size_t n, value
 /**
  * Identity rules for mul: a factor of 1 can go (x * 1 = x), and a factor of 0
  * makes the whole product 0, also when another factor could be 0 or a
- * division by it (0 * y^-1 is 0).
+ * division by it (0 * y^-1 is 0). Then like factors are collected by adding
+ * their exponents (x * x^2 = x^3, x * x^-1 = x^0 = 1). The sum is built as an
+ * add node, since exponents can be symbols, and fold_constants evaluates it
+ * in the next round. The constant coefficient is not a base: 2 * 2^x stays.
  */
 static expr_t *fn_mul_rewrite(cas_t *cas, expr_t *e)
 {
@@ -277,7 +296,67 @@ static expr_t *fn_mul_rewrite(cas_t *cas, expr_t *e)
         if (is_zero(e->as.apply.args[i]))
             return int_const(cas, e->span, 0);
     }
-    return drop_args(cas, e, is_one, 1);
+    expr_t *out = drop_args(cas, e, is_one, 1);
+    if (!out || !expr_is_apply_of(out, &fn_mul))
+        return out;
+
+    size_t n = out->as.apply.nargs;
+    expr_t **bases = cas_scratch_alloc(cas, n * sizeof(*bases)); // group key: x for x * x^2
+    expr_t **exponents = cas_scratch_alloc(cas, n * sizeof(*exponents)); // exponent nodes, summed lazily
+    expr_t *const_coef = NULL; // collect_assoc leaves at most one
+    if (!exponents || !bases)
+        return NULL;
+
+    size_t ngroups = 0;
+    int merged = 0;
+
+    for (size_t i = 0; i < n; i++) {
+        expr_t *arg = out->as.apply.args[i];
+        if (expr_is_const(arg)) {
+            const_coef = arg;
+            continue;
+        }
+
+        expr_t *exponent;
+        expr_t *base = product_split_term(cas, arg, &exponent);
+        if (!base || !exponent)
+            return NULL;
+        size_t g_idx = 0;
+        while (g_idx < ngroups && !expr_equal(base, bases[g_idx])) {
+            g_idx++;
+        }
+
+        if (g_idx == ngroups) {
+            exponents[g_idx] = exponent;
+            bases[g_idx] = base;
+            ngroups++;
+        }
+        else {
+            expr_t *sum[] = { exponents[g_idx], exponent };
+
+            if (!(exponents[g_idx] = expr_new_apply(cas, e->span, &fn_add, sum, 2)))
+                return NULL;
+            merged = 1;
+        }
+    }
+
+    if (!merged)
+        return out;
+
+    size_t total = ngroups + (const_coef != NULL);
+    expr_t **factors = cas_scratch_alloc(cas, total * sizeof(*factors));
+    if (!factors)
+        return NULL;
+
+    size_t k = 0;
+    if (const_coef)
+        factors[k++] = const_coef; // the coefficient stays in front
+    for (size_t g_idx = 0; g_idx < ngroups; g_idx++) {
+        expr_t *power[] = { bases[g_idx], exponents[g_idx] };
+        if (!(factors[k++] = expr_new_apply(cas, e->span, &fn_pow, power, 2)))
+            return NULL;
+    }
+    return total == 1 ? factors[0] : expr_new_apply(cas, e->span, &fn_mul, factors, total);
 }
 
 /** div(a, b). */
