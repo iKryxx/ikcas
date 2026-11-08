@@ -28,7 +28,7 @@ IKCAS_PLUGIN(my_plugin, "1.0", my_init, NULL /* shutdown */);
 | Call | Descriptor | Purpose |
 | --- | --- | --- |
 | `registry_add_type` | `value_type_t` | A kind of value (int, rational, float, ...). `rank` orders the numeric tower; mixed operands are promoted to the higher rank. |
-| `registry_add_fn` | `fn_def_t` | A callable: name, arity range, `eval` that folds constant arguments, optional `rewrite`, algebraic `attrs`. |
+| `registry_add_fn` | `fn_def_t` | A callable: name, arity range, `eval` that folds constant arguments, optional `rewrite`, algebraic `attrs`, optional `order` for the arguments of a commutative function. |
 | `registry_add_op` | `op_def_t` | Syntax for a function: symbol, prefix/infix/postfix, precedence, associativity. |
 | `registry_add_literal` | `literal_def_t` | Number syntax: `match` returns the length of a literal at the cursor, `make` builds the value. Longest match wins. |
 | `registry_add_constant` | `constant_def_t` | A named value such as `pi`. |
@@ -65,6 +65,11 @@ passes pattern-match on.
   log line, and the last tree is the result.
 * A `rewrite` hook of a variadic function sees all its arguments, not just the
   first two: `collect_assoc` flattens `a*b*c` into one application.
+* `collect_assoc` sorts the non-constant arguments of a commutative function
+  with its `order` (`expr_compare` if it is NULL). Sort only there: a rewrite
+  hook that reorders arguments differently undoes the pass every round and the
+  pipeline never settles. An `order` must be a total order that returns 0
+  exactly when `expr_equal` does, and must not allocate.
 * Descriptors are stored by pointer: keep them `static const` (or otherwise
   alive until `cas_free`).
 

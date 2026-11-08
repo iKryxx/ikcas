@@ -15,6 +15,8 @@
 #include <assert.h>
 #include <time.h>
 
+__extension__ typedef __int128 i128; // a GCC/Clang extension, -Wpedantic needs it marked
+
 static int failures = 0;
 
 /** Compares a bignum's decimal text with the expected one and counts a failure if they differ. */
@@ -953,7 +955,7 @@ static void test_random_cross_check(void) {
         bignum_from_i64(&b, y);
 
         bignum_add(&r, &a, &b);
-        __int128 expect_add = (__int128)x + y;
+        i128 expect_add = (i128)x + y;
         char *s = bignum_to_str(&r, 10);
         char expect_buf[64];
         // x+y needs 65 bits at most, so print as int64 when it fits and
@@ -971,7 +973,7 @@ static void test_random_cross_check(void) {
         bignum_t sub;
         bignum_init(&sub, allocator_heap());
         bignum_sub(&sub, &a, &b);
-        __int128 expect_sub = (__int128)x - y;
+        i128 expect_sub = (i128)x - y;
         s = bignum_to_str(&sub, 10);
         if (expect_sub >= INT64_MIN && expect_sub <= INT64_MAX) {
             snprintf(expect_buf, sizeof(expect_buf), "%lld", (long long)expect_sub);
@@ -987,7 +989,7 @@ static void test_random_cross_check(void) {
         bignum_t m;
         bignum_init(&m, allocator_heap());
         bignum_mul(&m, &a, &b);
-        __int128 expect_mul = (__int128)x * y;
+        i128 expect_mul = (i128)x * y;
         s = bignum_to_str(&m, 10);
         if (expect_mul >= INT64_MIN && expect_mul <= INT64_MAX) {
             snprintf(expect_buf, sizeof(expect_buf), "%lld", (long long)expect_mul);

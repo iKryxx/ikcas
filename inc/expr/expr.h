@@ -62,6 +62,13 @@ expr_t *expr_clone(cas_t *cas, const expr_t *e);
 int expr_equal(const expr_t *a, const expr_t *b);
 
 /**
+ * Total order on expressions, for sorting the arguments of commutative
+ * functions into one canonical form. <0, 0 or >0, and 0 exactly when
+ * expr_equal(a, b).
+ */
+int expr_compare(const expr_t *a, const expr_t *b);
+
+/**
  * Callback for expr_map. Returns the replacement for node, the node itself
  * to keep it, or NULL after reporting an error.
  */

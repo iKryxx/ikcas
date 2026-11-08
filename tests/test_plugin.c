@@ -87,7 +87,7 @@ static expr_t *shout_pass(cas_t *cas, expr_t *root)
     return expr_map(cas, root, shout_node, NULL);
 }
 
-static const fn_def_t fn_fact = { "fact", 1, 1, 0, fact_eval, NULL };
+static const fn_def_t fn_fact = { "fact", 1, 1, 0, fact_eval, NULL, NULL };
 static const op_def_t op_fact = { "!", FIX_POSTFIX, 50, ASSOC_LEFT, &fn_fact };
 static const constant_def_t const_answer = { "answer", answer_make };
 static const pass_def_t pass_square = { "square", square_pass };
@@ -125,7 +125,7 @@ IKCAS_PLUGIN(demo, "0.1", demo_init, demo_shutdown);
 static cas_status_t clash_init(cas_t *cas)
 {
     // arith already registered "add"
-    static const fn_def_t again = { "add", 2, 2, 0, NULL, NULL };
+    static const fn_def_t again = { "add", 2, 2, 0, NULL, NULL, NULL };
     return registry_add_fn(cas, &again);
 }
 IKCAS_PLUGIN(clash, "1", clash_init, NULL);

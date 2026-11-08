@@ -1,6 +1,9 @@
 #include "test_util.h"
+#include "expr/expr.h"
+#include "input/parser.h"
 
 #include <stdlib.h>
+#include <string.h>
 
 /** Evaluates src and compares the printed result with the expected text. */
 static void check_eval(cas_t *cas, const char *src, const char *want)
@@ -18,9 +21,53 @@ static void check_canonical(cas_t *cas, const char *src, const char *want)
     free(got);
 }
 
+/** The parse tree of src, without simplification. */
+static expr_t *parse(cas_t *cas, const char *src)
+{
+    expr_t *e = NULL;
+    CHECK(parser_parse(cas, src, strlen(src), &e) == CAS_OK && e);
+    return e;
+}
+
+static int sign(int x)
+{
+    return (x > 0) - (x < 0);
+}
+
+/**
+ * expr_compare is the total order the sort relies on: reflexive, antisymmetric, transitive,
+ * and 0 exactly when expr_equal. A comparator that breaks this shows up only as terms that
+ * sometimes fail to collect, so it is checked on its own over every pair and triple.
+ */
+static void test_expr_compare(void)
+{
+    cas_t *cas = test_new_cas(0);
+    const char *srcs[] = { "x", "y", "xy", "ab", "x*y", "a*b", "y*x", "x^2", "x^3", "x+y",
+                           "2", "3", "float(2)", "1/2", "x*y*z", "-x" };
+    enum { N = sizeof(srcs) / sizeof(*srcs) };
+    expr_t *e[N];
+    for (size_t i = 0; i < N; i++)
+        e[i] = parse(cas, srcs[i]);
+    for (size_t i = 0; i < N; i++) {
+        CHECK(expr_compare(e[i], parse(cas, srcs[i])) == 0); // an equal copy, not the same node
+        for (size_t j = 0; j < N; j++) {
+            int ij = expr_compare(e[i], e[j]);
+            CHECK(sign(ij) == -sign(expr_compare(e[j], e[i])));
+            CHECK((ij == 0) == !!expr_equal(e[i], e[j]));
+            for (size_t k = 0; k < N; k++) {
+                if (ij < 0 && expr_compare(e[j], e[k]) < 0)
+                    CHECK(expr_compare(e[i], e[k]) < 0);
+            }
+        }
+    }
+    cas_free(cas);
+}
+
 /** Integers, exact fractions, errors, symbols, the numeric tower, powers, extra_ops. */
 void run_eval_tests(void)
 {
+    test_expr_compare();
+
     cas_t *cas = test_new_cas(1);
 
     // integer arithmetic
@@ -199,7 +246,7 @@ void run_eval_tests(void)
     check_eval(cas, "2*x+3*y+x-y", "3 * x + 2 * y"); // two groups in one sum
     check_eval(cas, "1/2*x+x", "(3/2) * x");
     check_eval(cas, "x+2*x-3*x", "0"); // the coefficient 0 makes the product 0, then add drops it
-    check_eval(cas, "x*y+y*x", "x * y + y * x"); // not merged yet: no canonical order of factors
+    check_eval(cas, "x*y+y*x", "2 * x * y"); // canonical order of factors
 
     // like factors: equal bases merge and their exponents add
     check_eval(cas, "x*x", "x ^ 2");
@@ -214,13 +261,30 @@ void run_eval_tests(void)
     check_eval(cas, "2*x*3*x", "6 * x ^ 2");
     check_eval(cas, "2*2^x", "2 * 2 ^ x"); // the coefficient is not a base
     check_eval(cas, "3*x*x+x^2", "4 * x ^ 2"); // collected factors, then collected terms
-    check_eval(cas, "x^2/x^2", "1"); 
-    check_eval(cas, "(x^2)^3", "x ^ 6"); 
-    check_eval(cas, "(x^a)^2", "x ^ (2 * a)"); 
-    check_eval(cas, "(x^2)^a", "(x ^ 2) ^ a"); 
-    check_eval(cas, "x^(a^b)", "x ^ a ^ b"); 
+    check_eval(cas, "x^2/x^2", "1"); // (x^2)^-1 becomes x^-2, then the factors collect
     check_canonical(cas, "x/x", "1");
     check_canonical(cas, "x*x/x", "x");
+
+    // a power of a power: (x^a)^n = x^(a*n), only for an int n
+    check_eval(cas, "(x^2)^3", "x ^ 6");
+    check_eval(cas, "(x^a)^2", "x ^ (2 * a)");
+    check_eval(cas, "((x^2)^3)^2", "x ^ 12");
+    check_eval(cas, "(x*x)^2", "x ^ 4");
+    check_eval(cas, "(x^2)^a", "(x ^ 2) ^ a"); // a may be 1/2, and (x^2)^(1/2) is not x
+    check_eval(cas, "x^(a^b)", "x ^ a ^ b"); // a tower in the exponent is no power of a power
+
+    // canonical order: factors by base, then exponent; terms by their factors, then coefficient
+    check_eval(cas, "y+x", "x + y");
+    check_eval(cas, "z*y*x", "x * y * z");
+    check_eval(cas, "x^2+y+x", "x + x ^ 2 + y"); // a plain factor before the powers of its base
+    check_eval(cas, "x*y+x^2+x", "x + x * y + x ^ 2");
+    check_eval(cas, "c-b+a", "a - b + c"); // the coefficient -1 does not move a term
+    check_eval(cas, "2*y+3*x", "3 * x + 2 * y"); // neither does a smaller coefficient
+    check_eval(cas, "b*a+a*b", "2 * a * b");
+    check_eval(cas, "2*y*x+3*x*y", "5 * x * y");
+    check_eval(cas, "x^a*x^2*x", "x ^ (3 + a)");
+    check_eval(cas, "(y+x)*(x+y)", "(x + y) ^ 2"); // sorted sums are equal factors
+    check_canonical(cas, "y*x", "x * y");
 
     // the numeric tower: floats absorb ints and rationals
     char *half = test_eval(cas, "float(1/2)");

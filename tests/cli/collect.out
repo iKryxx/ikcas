@@ -4,7 +4,7 @@ eval: 0
 eval: 3 * x * y
 eval: 3 + 2 * x
 eval: 3 * x + 2 * y
-eval: x * y + y * x
+eval: 2 * x * y
 eval: x ^ 2
 eval: x ^ 3
 eval: 2
@@ -12,3 +12,10 @@ eval: x ^ (a + b)
 eval: 2 * x ^ 2
 eval: 2 * 2 ^ x
 eval: 4 * x ^ 2
+eval: x + y
+eval: x + x ^ 2 + y
+eval: a - b + c
+eval: 2 * a * b
+eval: x ^ 6
+eval: 1
+eval: (x + y) ^ 2

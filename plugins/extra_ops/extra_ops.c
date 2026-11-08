@@ -13,7 +13,7 @@ static cas_status_t fn_abs_eval(cas_t *cas, const value_t *args, size_t n, value
     return value_copy(cas, out, &args[0]);
 }
 
-static const fn_def_t fn_abs = { "abs", 1, 1, 0, fn_abs_eval, NULL };
+static const fn_def_t fn_abs = { "abs", 1, 1, 0, fn_abs_eval, NULL, NULL };
 
 /** Registers abs. */
 static cas_status_t extra_ops_init(cas_t *cas)

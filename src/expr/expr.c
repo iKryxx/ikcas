@@ -1,6 +1,7 @@
 #include "expr/expr.h"
 #include "engine/cas.h"
 
+#include <stdint.h>
 #include <string.h>
 
 /** Allocates a zeroed node. */
@@ -123,6 +124,52 @@ int expr_equal(const expr_t *a, const expr_t *b)
                 return 0;
         }
         return 1;
+    }
+    return 0;
+}
+
+/** Constants < symbols < applications, then field by field within a kind. */
+int expr_compare(const expr_t *a, const expr_t *b)
+{
+    if (a->kind != b->kind)
+        return a->kind < b->kind ? -1 : 1;
+    switch (a->kind) {
+    case EXPR_CONST: {
+        if (a->as.value.type != b->as.value.type) {
+            if (a->as.value.type->rank == b->as.value.type->rank)
+                return strcmp(a->as.value.type->name, b->as.value.type->name);
+            return a->as.value.type->rank < b->as.value.type->rank ? -1 : 1;
+        }
+        if (a->as.value.type->cmp == NULL)
+            return 0; // the type has no order, the one case where 0 does not mean expr_equal
+        return a->as.value.type->cmp(&a->as.value, &b->as.value);
+    }
+    case EXPR_SYMBOL: {
+        const size_t n = a->as.sym.len <= b->as.sym.len ? a->as.sym.len : b->as.sym.len;
+        int cmp = memcmp(a->as.sym.name, b->as.sym.name, n);
+        if (cmp != 0)
+            return cmp;
+        if (n == a->as.sym.len && n == b->as.sym.len)
+            return 0;
+        return n == a->as.sym.len ? -1 : 1;
+    }
+    case EXPR_APPLY: {
+        int cmp = strcmp(a->as.apply.fn->name, b->as.apply.fn->name);
+        if (cmp != 0)
+            return cmp;
+        if (a->as.apply.nargs != b->as.apply.nargs)
+            return a->as.apply.nargs < b->as.apply.nargs ? -1 : 1;
+
+        for (size_t i = 0; i < a->as.apply.nargs; i++) {
+            int c = expr_compare(a->as.apply.args[i], b->as.apply.args[i]);
+            if (c != 0)
+                return c;
+        }
+        // two functions with the same name, from different plugins: tell them apart by address
+        if (a->as.apply.fn == b->as.apply.fn)
+            return 0;
+        return (uintptr_t)a->as.apply.fn < (uintptr_t)b->as.apply.fn ? -1 : 1;
+    }
     }
     return 0;
 }

@@ -2,7 +2,7 @@ CC = gcc
 AR = ar
 
 # Three build flavors: release (build/rel), debug (build/dbg), asan (build/asan).
-WARN = -Wall -Wextra -Wpedantic
+WARN = -Wall -Wextra -Wpedantic -Werror
 INC = -Iinc -Iplugins
 CFLAGS = $(WARN) -O2 $(INC)
 DBG_CFLAGS = $(WARN) -O0 -g3 $(INC)

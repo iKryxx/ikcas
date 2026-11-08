@@ -281,10 +281,11 @@ text -> lexer -> parser -> expression tree -> simplification passes -> result ->
 - Expressions are immutable. Passes build new trees, so the parse tree is still there after simplification.
 - The passes repeat until a round changes nothing (at most 8 rounds), so a rule that only applies after another pass has run still fires.
 - Constant subtrees are folded. With symbols present it folds what it can, so `2*3*x` becomes `6 * x`.
-- Inside the engine there is no subtraction, division or negation: `a - b` is `a + (-1)*b`, `a / b` is `a * b^-1` and `-a` is `-1 * a`, so rules only deal with `+`, `*` and `^`. The `arith` plugin does this through the `rewrite` hooks of `sub`, `div` and `neg`, and a display pass turns the result back into the text you would write. Identity rules clean up after it: `x + 0`, `1 * x`, `0 * x`, `x ^ 1`, `x ^ 0` and `1 ^ x` simplify, so `--x` is `x`.
+- Inside the engine there is no subtraction, division or negation: `a - b` is `a + (-1)*b`, `a / b` is `a * b^-1` and `-a` is `-1 * a`, so rules only deal with `+`, `*` and `^`. The `arith` plugin does this through the `rewrite` hooks of `sub`, `div` and `neg`, and a display pass turns the result back into the text you would write. Identity rules clean up after it: `x + 0`, `1 * x`, `0 * x`, `x ^ 1`, `x ^ 0` and `1 ^ x` simplify, so `--x` is `x`. Like terms and like factors are collected (`3*x + x` is `4 * x`, `x * x^2` is `x ^ 3`, `2*x/x` is `2`), and `(x^a)^n` becomes `x^(a*n)` for an int `n`.
+- The arguments of `+` and `*` are kept in a canonical order, so `y*x + x*y` is `2 * x * y`. The core has a structural order (`expr_compare`), and a function can bring its own through the `order` field of its `fn_def_t`: `arith` sorts factors by base, then exponent, and terms by their factors, then coefficient, so `c - b + a` prints as `a - b + c`.
 - Values are tagged, with a rank that orders the numeric tower. Plugins can add their own types.
 
-Symbolic work (collecting terms, reordering, expansion) slots in as new passes or per-function rewrite hooks.
+Further symbolic work (expansion, factoring) slots in as new passes or per-function rewrite hooks.
 
 ---
 

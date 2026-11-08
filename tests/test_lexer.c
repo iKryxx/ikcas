@@ -39,7 +39,7 @@ static void check_lex(cas_t *cas, const char *src, const char *want)
 
 // Longest-match tests need two operators that share a prefix. No shipped
 // plugin has that, so these are dummies.
-static const fn_def_t dummy_fn = { "dummy", 2, 2, 0, NULL, NULL };
+static const fn_def_t dummy_fn = { "dummy", 2, 2, 0, NULL, NULL, NULL };
 static const op_def_t star_star = { "**", FIX_INFIX, 40, ASSOC_RIGHT, &dummy_fn };
 static const op_def_t word_op = { "mod", FIX_INFIX, 20, ASSOC_LEFT, &dummy_fn };
 

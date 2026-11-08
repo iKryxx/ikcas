@@ -16,8 +16,9 @@ extern const pass_def_t pass_fold_constants;
  * The second pass the engine ships. It normalizes application of associative functions.
  * Nested applications of the same function are flattened (mul(mul(a, b), c) becomes mul(a, b, c)).
  * If the function is also commutative, its constant arguments are folded into one and moved
- * to the front, so 2 * 5 * x * 3 becomes 30 * x. Only functions with FN_ASSOCIATIVE and a variadic
- * max_args are touched.
+ * to the front, so 2 * 5 * x * 3 becomes 30 * x. The other arguments are sorted with the
+ * function's order (expr_compare if it has none), so y * x becomes x * y and equal terms end up
+ * next to each other. Only functions with FN_ASSOCIATIVE and a variadic max_args are touched.
  */
 extern const pass_def_t pass_collect_assoc;
 

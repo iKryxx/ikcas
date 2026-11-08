@@ -58,6 +58,25 @@ static expr_t *fold_node(cas_t *cas, expr_t *e, void *user)
     return fold_apply(cas, e->as.apply.fn, argv, n, e->span);
 }
 
+/**
+ * Sorts args in place with order, falling back to expr_compare. Insertion sort: argument lists
+ * are short, it is stable, and unlike qsort it can use a per-function order.
+ */
+static void sort_args(expr_t **args, size_t n, fn_order_t order)
+{
+    if (!order)
+        order = expr_compare;
+    for (size_t i = 1; i < n; i++) {
+        expr_t *x = args[i];
+        size_t j = i;
+        while (j > 0 && order(args[j - 1], x) > 0) {
+            args[j] = args[j - 1];
+            j--;
+        }
+        args[j] = x;
+    }
+}
+
 /** Flattens nested applications of an associative fn and folds the constants of a commutative one */
 static expr_t *collect_node(cas_t *cas, expr_t *e, void *user)
 {
@@ -96,6 +115,10 @@ static expr_t *collect_node(cas_t *cas, expr_t *e, void *user)
             }
         }
     }
+
+    // canonical order of the rest, so equal terms meet in the rewrite hooks: y*x becomes x*y
+    if (comm)
+        sort_args(rest, nr, fn->order);
 
     // fold constants, a single constant is reused as-is
     expr_t *folded = nc == 1 ? cn[0] : 0;

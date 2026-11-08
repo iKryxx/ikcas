@@ -36,6 +36,13 @@ typedef cas_status_t (*fn_eval_t)(cas_t *cas, const value_t *args, size_t nargs,
 typedef expr_t *(*fn_rewrite_t)(cas_t *cas, expr_t *apply);
 
 /**
+ * Optional argument order of a commutative function, used by the collect_assoc pass to sort its
+ * non-constant arguments. Returns <0, 0 or >0 and has to be a total order, with 0 exactly when
+ * expr_equal: fall back to expr_compare to break ties. NULL means expr_compare alone.
+ */
+typedef int (*fn_order_t)(const expr_t *a, const expr_t *b);
+
+/**
  * A callable: operators, named functions, anything a pass builds. eval may be
  * NULL for functions that only exist symbolically.
  */
@@ -46,6 +53,7 @@ struct fn_def {
     unsigned attrs;
     fn_eval_t eval;
     fn_rewrite_t rewrite;
+    fn_order_t order;
 };
 
 typedef enum {

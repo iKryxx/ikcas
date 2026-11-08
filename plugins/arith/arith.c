@@ -592,13 +592,68 @@ static cas_status_t fn_float_eval(cas_t *cas, const value_t *args, size_t n, val
     return value_convert(cas, out, &args[0], &arith_type_float);
 }
 
-static const fn_def_t fn_add = { "add", 2, FN_VARIADIC, FN_COMMUTATIVE | FN_ASSOCIATIVE, fn_add_eval, fn_add_rewrite };
-static const fn_def_t fn_sub = { "sub", 2, 2, 0, fn_sub_eval, fn_sub_rewrite };
-static const fn_def_t fn_mul = { "mul", 2, FN_VARIADIC, FN_COMMUTATIVE | FN_ASSOCIATIVE, fn_mul_eval, fn_mul_rewrite };
-static const fn_def_t fn_div = { "div", 2, 2, 0, fn_div_eval, fn_div_rewrite };
-static const fn_def_t fn_neg = { "neg", 1, 1, 0, fn_neg_eval, fn_neg_rewrite };
-static const fn_def_t fn_pow = { "pow", 2, 2, 0, fn_pow_eval, fn_pow_rewrite };
-static const fn_def_t fn_float = { "float", 1, 1, 0, fn_float_eval, NULL };
+// argument order
+
+/**
+ * Order of the factors of a product: by base, and a plain factor before the powers of its base,
+ * which are ordered by exponent. So x < x^2 < x^a < y, and 3*y*x^2 sorts to 3*x^2*y.
+ */
+static int factor_order(const expr_t *a, const expr_t *b)
+{
+    int pow_a = expr_is_apply_of(a, &fn_pow), pow_b = expr_is_apply_of(b, &fn_pow);
+    int c = expr_compare(pow_a ? a->as.apply.args[0] : a, pow_b ? b->as.apply.args[0] : b);
+    if (c != 0)
+        return c;
+    if (pow_a != pow_b)
+        return pow_a ? 1 : -1;
+    return pow_a ? expr_compare(a->as.apply.args[1], b->as.apply.args[1]) : 0;
+}
+
+/**
+ * The factors of a term without its numeric coefficient: 3*x*y gives x, y and x^2 gives x^2. A
+ * term that is no product is its own single factor, kept in *one. Nothing is allocated, this
+ * runs inside a sort.
+ */
+static const expr_t *const *term_factors(const expr_t *t, const expr_t **one, size_t *n)
+{
+    if (!expr_is_apply_of(t, &fn_mul)) {
+        *one = t;
+        *n = 1;
+        return one;
+    }
+    size_t skip = expr_is_const(t->as.apply.args[0]);
+    *n = t->as.apply.nargs - skip;
+    return (const expr_t *const *)t->as.apply.args + skip;
+}
+
+/**
+ * Order of the terms of a sum: by their factors (factor_order, one by one, fewer first) and only
+ * then by coefficient. So 3*x + 2*y keeps its order, a + b - c + d stays as written, and like
+ * terms meet: x < x*y < x^2 < y.
+ */
+static int term_order(const expr_t *a, const expr_t *b)
+{
+    const expr_t *one_a, *one_b;
+    size_t na, nb;
+    const expr_t *const *fa = term_factors(a, &one_a, &na);
+    const expr_t *const *fb = term_factors(b, &one_b, &nb);
+    for (size_t i = 0; i < na && i < nb; i++) {
+        int c = factor_order(fa[i], fb[i]);
+        if (c != 0)
+            return c;
+    }
+    if (na != nb)
+        return na < nb ? -1 : 1;
+    return expr_compare(a, b); // the same factors: the coefficient decides
+}
+
+static const fn_def_t fn_add = { "add", 2, FN_VARIADIC, FN_COMMUTATIVE | FN_ASSOCIATIVE, fn_add_eval, fn_add_rewrite, term_order };
+static const fn_def_t fn_sub = { "sub", 2, 2, 0, fn_sub_eval, fn_sub_rewrite, NULL };
+static const fn_def_t fn_mul = { "mul", 2, FN_VARIADIC, FN_COMMUTATIVE | FN_ASSOCIATIVE, fn_mul_eval, fn_mul_rewrite, factor_order };
+static const fn_def_t fn_div = { "div", 2, 2, 0, fn_div_eval, fn_div_rewrite, NULL };
+static const fn_def_t fn_neg = { "neg", 1, 1, 0, fn_neg_eval, fn_neg_rewrite, NULL };
+static const fn_def_t fn_pow = { "pow", 2, 2, 0, fn_pow_eval, fn_pow_rewrite, NULL };
+static const fn_def_t fn_float = { "float", 1, 1, 0, fn_float_eval, NULL, NULL };
 
 // display
 
