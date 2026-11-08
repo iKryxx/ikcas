@@ -214,7 +214,11 @@ void run_eval_tests(void)
     check_eval(cas, "2*x*3*x", "6 * x ^ 2");
     check_eval(cas, "2*2^x", "2 * 2 ^ x"); // the coefficient is not a base
     check_eval(cas, "3*x*x+x^2", "4 * x ^ 2"); // collected factors, then collected terms
-    check_eval(cas, "x^2/x^2", "x ^ 2 / x ^ 2"); // not merged yet: (x^2)^-1 is not x^-2
+    check_eval(cas, "x^2/x^2", "1"); 
+    check_eval(cas, "(x^2)^3", "x ^ 6"); 
+    check_eval(cas, "(x^a)^2", "x ^ (2 * a)"); 
+    check_eval(cas, "(x^2)^a", "(x ^ 2) ^ a"); 
+    check_eval(cas, "x^(a^b)", "x ^ a ^ b"); 
     check_canonical(cas, "x/x", "1");
     check_canonical(cas, "x*x/x", "x");
 

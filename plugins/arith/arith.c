@@ -545,17 +545,30 @@ static cas_status_t fn_pow_eval(cas_t *cas, const value_t *args, size_t n, value
 }
 
 /**
- * Identity rules for pow: x^1 = x, x^0 = 1 and 1^x = 1.
+ * - Identity rules for pow: x^1 = x, x^0 = 1 and 1^x = 1.
+ * - Power of a power: (x^a)^2 = x^(2*a)
  */
 static expr_t *fn_pow_rewrite(cas_t *cas, expr_t *e)
 {
     expr_t *base = e->as.apply.args[0];
     expr_t *exp = e->as.apply.args[1];
 
+    // Identity rules
     if (is_one(exp))
         return base;
     if (is_one(base) || is_zero(exp))
         return int_const(cas, e->span, 1);
+    
+    // Power of a power
+    if (expr_is_apply_of(base, &fn_pow) && expr_is_const(exp) && arith_is_int(&exp->as.value)) {
+        expr_t *product;
+        expr_t *factors[] = { base->as.apply.args[1], exp };
+        if (!(product = expr_new_apply(cas, e->span, &fn_mul, factors, 2)))
+            return NULL;
+        
+        expr_t *power[] = { base->as.apply.args[0], product };
+        return expr_new_apply(cas, e->span, &fn_pow, power, 2);
+    }
     return e;
 }
 
