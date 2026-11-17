@@ -12,6 +12,7 @@
 [debug] register function 'neg' (arith)
 [debug] register function 'pow' (arith)
 [debug] register function 'float' (arith)
+[debug] register function 'expand' (arith)
 [debug] register infix operator '+' -> add (arith)
 [debug] register infix operator '-' -> sub (arith)
 [debug] register infix operator '*' -> mul (arith)

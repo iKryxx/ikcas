@@ -7,6 +7,9 @@
 #include "misc/allocator.h"
 
 #include <ctype.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <string.h>
 
 // forward declarations
 static const fn_def_t fn_add;
@@ -559,7 +562,7 @@ static expr_t *fn_pow_rewrite(cas_t *cas, expr_t *e)
     if (is_one(base) || is_zero(exp))
         return int_const(cas, e->span, 1);
     
-    // Power of a power
+    // Power of a power (x^3)^2 == x^6
     if (expr_is_apply_of(base, &fn_pow) && expr_is_const(exp) && arith_is_int(&exp->as.value)) {
         expr_t *product;
         expr_t *factors[] = { base->as.apply.args[1], exp };
@@ -568,6 +571,22 @@ static expr_t *fn_pow_rewrite(cas_t *cas, expr_t *e)
         
         expr_t *power[] = { base->as.apply.args[0], product };
         return expr_new_apply(cas, e->span, &fn_pow, power, 2);
+    }
+
+    // Power of a product (x1 * x2 * ... * xi)^n = x1^n * x2^n * ... * xi^n
+    if (expr_is_apply_of(base, &fn_mul) && expr_is_const(exp) && arith_is_int(&exp->as.value)) {
+        expr_t **factors = cas_scratch_alloc(cas, base->as.apply.nargs * sizeof(*factors));
+        if (!factors)
+            return NULL;
+        size_t k = 0;
+
+        for (size_t i = 0; i < base->as.apply.nargs; i++) {
+            expr_t *power[] = { base->as.apply.args[i], exp };
+
+            if (!(factors[k++] = expr_new_apply(cas, e->span, &fn_pow, power, 2)))
+                return NULL;
+        }
+        return expr_new_apply(cas, e->span, &fn_mul, factors, k);
     }
     return e;
 }
@@ -590,6 +609,174 @@ static cas_status_t fn_float_eval(cas_t *cas, const value_t *args, size_t n, val
 {
     (void)n;
     return value_convert(cas, out, &args[0], &arith_type_float);
+}
+
+// expand
+
+/** Upper bound on the terms of one expansion. Past it expand reports an error instead of filling the arena. */
+#define EXPAND_MAX_TERMS 4096
+
+/** A growable list of terms in the scratch arena. Start it as { 0 }. */
+typedef struct {
+    expr_t **items;
+    size_t len, cap;
+} term_list_t;
+
+/** Appends t. Fails with an error pointing at span once the list would pass EXPAND_MAX_TERMS. */
+static int terms_push(cas_t *cas, span_t span, term_list_t *l, expr_t *t)
+{
+    if (l->len >= EXPAND_MAX_TERMS) {
+        cas->cur_span = span;
+        cas_error(cas, CAS_ERR_DOMAIN, "expand: more than %d terms", EXPAND_MAX_TERMS);
+        return 0;
+    }
+    if (l->len == l->cap) {
+        size_t cap = l->cap ? 2 * l->cap : 4;
+        expr_t **items = cas_scratch_alloc(cas, cap * sizeof(*items));
+        if (!items)
+            return 0;
+        if (l->len)
+            memcpy(items, l->items, l->len * sizeof(*items));
+        l->items = items;
+        l->cap = cap;
+    }
+    l->items[l->len++] = t;
+    return 1;
+}
+
+/** Every product of a term of a with a term of b: (a1 + a2) * (b1 + b2) gives a1*b1, a1*b2, a2*b1, a2*b2. */
+static int terms_product(cas_t *cas, span_t span, const term_list_t *a, const term_list_t *b, term_list_t *out)
+{
+    *out = (term_list_t){ 0 };
+    for (size_t i = 0; i < a->len; i++) {
+        for (size_t j = 0; j < b->len; j++) {
+            expr_t *factors[] = { a->items[i], b->items[j] };
+            expr_t *t = expr_new_apply(cas, span, &fn_mul, factors, 2);
+            if (!t || !terms_push(cas, span, out, t))
+                return 0;
+        }
+    }
+    return 1;
+}
+
+/**
+ * Collects the like terms of a partial expansion by running the pipeline on their sum, and puts
+ * the terms of the result in out. Between the multiplications of (x+1)^n this keeps n+1 terms
+ * instead of 2^n.
+ */
+static int terms_collect(cas_t *cas, span_t span, const term_list_t *in, term_list_t *out)
+{
+    expr_t *sum = in->len == 1 ? in->items[0] : expr_new_apply(cas, span, &fn_add, in->items, in->len);
+    expr_t *s = sum ? cas_simplify(cas, sum) : NULL;
+    if (!s)
+        return 0;
+    *out = (term_list_t){ 0 };
+    if (!expr_is_apply_of(s, &fn_add))
+        return terms_push(cas, span, out, s);
+    for (size_t i = 0; i < s->as.apply.nargs; i++) {
+        if (!terms_push(cas, span, out, s->as.apply.args[i]))
+            return 0;
+    }
+    return 1;
+}
+
+/**
+ * n if e is a sum to a positive int power, the one kind of power expand multiplies out:
+ * (x+1)^3 gives 3. 0 for anything else, (x+1)^-1, (x+1)^a and (x*y)^2 included.
+ */
+static uint64_t sum_power(const expr_t *e)
+{
+    if (!expr_is_apply_of(e, &fn_pow) || !expr_is_apply_of(e->as.apply.args[0], &fn_add))
+        return 0;
+    const expr_t *exp = e->as.apply.args[1];
+    uint64_t n;
+    if (!expr_is_const(exp) || !arith_is_int(&exp->as.value) || exp->as.value.as.i.sign <= 0 ||
+        !exponent_u64(&exp->as.value.as.i, &n))
+        return 0;
+    return n;
+}
+
+/**
+ * The terms of e with every product and positive int power of a sum multiplied out, appended
+ * to out. A sum gives the terms of its arguments, a product every combination of the terms of its
+ * factors, and anything else is a single term. Nesting can be arbitrary, add(add(a, b), c)
+ * included: collect_assoc may not have flattened the argument yet.
+ */
+static int expand_terms(cas_t *cas, expr_t *e, term_list_t *out)
+{
+    if (expr_is_apply_of(e, &fn_add)) {
+        for (size_t i = 0; i < e->as.apply.nargs; i++) {
+            expr_t *arg = e->as.apply.args[i];
+            if (!expand_terms(cas, arg, out))
+                return 0;
+        }
+        return 1;
+    }
+
+    if (expr_is_apply_of(e, &fn_mul)) {
+        term_list_t acc = { 0 };
+        if (!expand_terms(cas, e->as.apply.args[0], &acc))
+            return 0;
+
+        for (size_t i = 1; i < e->as.apply.nargs; i++) {
+            term_list_t cur = { 0 };
+            term_list_t next = { 0 };
+            if (!expand_terms(cas, e->as.apply.args[i], &cur))
+                return 0;
+
+            if (!terms_product(cas, e->span, &acc, &cur, &next))
+                return 0;
+
+            acc = next;
+        }
+        for (size_t i = 0; i < acc.len; i++) {
+            if (!terms_push(cas, e->span, out, acc.items[i]))
+                return 0;
+        }
+        return 1;
+    }
+    // Also checks if e is apply and pow
+    uint64_t n = sum_power(e);
+    if (n > 0) {
+        term_list_t base = { 0 };
+        term_list_t acc = { 0 };
+        if (!expand_terms(cas, e->as.apply.args[0], &base))
+            return 0;
+        if (base.len == 0)
+            return 0;
+        acc = base;
+
+        for (uint64_t i = 1; i < n; i++) {
+            term_list_t next = { 0 };
+            if (!terms_product(cas, e->span, &acc, &base, &next))
+                return 0;
+            if (!terms_collect(cas, e->span, &next, &acc))
+                return 0;
+        }
+        for (size_t i = 0; i < acc.len; i++) {
+            if (!terms_push(cas, e->span, out, acc.items[i]))
+                return 0;
+        }
+        return 1;
+    }
+    return terms_push(cas, e->span, out, e);
+}
+
+/**
+ * expand(e): multiplies out products and positive int powers of sums. The expand node goes
+ * away, and the usual passes collect and sort the terms of the result.
+ */
+static expr_t *fn_expand_rewrite(cas_t *cas, expr_t *e)
+{
+    expr_t *arg = cas_simplify(cas, e->as.apply.args[0]);
+    if (!arg)
+        return NULL;
+    term_list_t terms = { 0 };
+    if (!expand_terms(cas, arg, &terms))
+        return NULL;
+    if (terms.len == 1)
+        return terms.items[0];
+    return expr_new_apply(cas, e->span, &fn_add, terms.items, terms.len);
 }
 
 // argument order
@@ -654,6 +841,7 @@ static const fn_def_t fn_div = { "div", 2, 2, 0, fn_div_eval, fn_div_rewrite, NU
 static const fn_def_t fn_neg = { "neg", 1, 1, 0, fn_neg_eval, fn_neg_rewrite, NULL };
 static const fn_def_t fn_pow = { "pow", 2, 2, 0, fn_pow_eval, fn_pow_rewrite, NULL };
 static const fn_def_t fn_float = { "float", 1, 1, 0, fn_float_eval, NULL, NULL };
+static const fn_def_t fn_expand = { "expand", 1, 1, 0, NULL, fn_expand_rewrite, NULL };
 
 // display
 
@@ -893,7 +1081,7 @@ static const op_def_t ops[] = {
 };
 
 static const value_type_t *const types[] = { &arith_type_int, &arith_type_rational, &arith_type_float };
-static const fn_def_t *const fns[] = { &fn_add, &fn_sub, &fn_mul, &fn_div, &fn_neg, &fn_pow, &fn_float };
+static const fn_def_t *const fns[] = { &fn_add, &fn_sub, &fn_mul, &fn_div, &fn_neg, &fn_pow, &fn_float, &fn_expand };
 
 /** Registers the numeric types, the integer literal, the functions and their operators. */
 static cas_status_t arith_init(cas_t *cas)

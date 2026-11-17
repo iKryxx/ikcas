@@ -168,10 +168,10 @@ void run_eval_tests(void)
     check_eval(cas, "x^-1", "1 / x");
     check_eval(cas, "x^-2", "1 / x ^ 2");
     check_eval(cas, "x^(-1/2)", "1 / x ^ (1/2)");
-    check_eval(cas, "(x/y)^2", "(x / y) ^ 2");
+    check_eval(cas, "(x/y)^2", "x ^ 2 / y ^ 2"); // a power of a product is distributed
     check_eval(cas, "-x/y", "-x / y");
     check_eval(cas, "-1/y", "-1 / y");
-    check_eval(cas, "x/-y", "x / -y");
+    check_eval(cas, "x/-y", "-x / y"); // (-1*y)^-1 is (-1)^-1 * y^-1, so the sign moves up
     check_eval(cas, "x/2/y", "(1/2) * x / y"); // a numeric coefficient stays in front
     check_eval(cas, "a/b+c/d", "a / b + c / d");
     check_eval(cas, "a-b/c", "a - b / c");
@@ -188,16 +188,14 @@ void run_eval_tests(void)
     check_canonical(cas, "x+-y", "x + (-1) * y");
     check_canonical(cas, "x/y", "x * y ^ (-1)");
     check_canonical(cas, "x/y/z", "x * y ^ (-1) * z ^ (-1)");
-    check_canonical(cas, "x/(y*z)", "x * (y * z) ^ (-1)");
+    check_canonical(cas, "x/(y*z)", "x * y ^ (-1) * z ^ (-1)"); // the same as x/y/z
     check_canonical(cas, "x/2", "(1/2) * x");
     check_canonical(cas, "2/x", "2 * x ^ (-1)");
 
     // printing the canonical form and parsing it again gives the same canonical form
-    // (not for -x+y: it prints as y - x, and the terms have no canonical order yet. Nor for
-    // x/y/z: it prints as x / (y * z), and (y*z)^-1 is not split into y^-1 * z^-1 yet)
     const char *round_trip[] = { "x-y", "x-3", "3-x", "x-2*y", "a-b-c", "a+b-c+d", "a-(b-c)", "x-1/2", "x-y*z",
                                   "-x", "-x*y", "-x-y", "-(x+y)", "x+-y", "x/2", "x/y", "2/x", "-x/y",
-                                  "x*y/z", "x/y-z/w", "a-b/c", "x/y+z" };
+                                  "x*y/z", "x/y-z/w", "a-b/c", "x/y+z", "-x+y", "x/y/z" };
     for (size_t i = 0; i < sizeof(round_trip) / sizeof(*round_trip); i++) {
         char *shown = test_eval(cas, round_trip[i]);
         char *before = test_canonical(cas, round_trip[i]);
@@ -285,6 +283,46 @@ void run_eval_tests(void)
     check_eval(cas, "x^a*x^2*x", "x ^ (3 + a)");
     check_eval(cas, "(y+x)*(x+y)", "(x + y) ^ 2"); // sorted sums are equal factors
     check_canonical(cas, "y*x", "x * y");
+
+    // expand: products and positive int powers of sums are multiplied out, only on request
+    check_eval(cas, "(x+1)^2", "(1 + x) ^ 2"); // never automatic
+    check_eval(cas, "expand(x*(x+1))", "x + x ^ 2");
+    check_eval(cas, "expand(2*(x+1))", "2 + 2 * x");
+    check_eval(cas, "expand((a+b)*(c+d))", "a * c + a * d + b * c + b * d");
+    check_eval(cas, "expand((x+1)*(x-1))", "x ^ 2 - 1"); // the x terms cancel
+    check_eval(cas, "expand((x+1)^2)", "1 + 2 * x + x ^ 2");
+    check_eval(cas, "expand((x+1)^3)", "1 + 3 * x + 3 * x ^ 2 + x ^ 3");
+    check_eval(cas, "expand((x+y)*(x+y))", "2 * x * y + x ^ 2 + y ^ 2"); // a square by then
+    check_eval(cas, "expand((x+1)^2-x^2)", "1 + 2 * x");
+    check_eval(cas, "expand(x*(y*(a+b)+1))", "a * x * y + b * x * y + x"); // nested
+    check_eval(cas, "expand((x+1)^2*(x-1))", "x ^ 2 - 1 - x + x ^ 3"); // display_sum leads with the first positive term
+    check_eval(cas, "2*expand(x*(x+1))", "2 * (x + x ^ 2)"); // the factor outside expand is not distributed
+    check_eval(cas, "expand(x)", "x");
+    check_eval(cas, "expand(3)", "3");
+    check_eval(cas, "expand(x+1)", "1 + x");
+    check_eval(cas, "expand((x+1)^-1)", "1 / (1 + x)"); // a denominator stays
+    check_eval(cas, "expand((x+1)^a)", "(1 + x) ^ a");
+    CHECK(test_status(cas, "expand((x+1)^60)") == CAS_OK); // 61 terms: collected between the multiplications
+    CHECK(test_status(cas, "expand((a+b+c+d+e+f+g+h)^10)") == CAS_ERR_DOMAIN); // 19448 terms, over the limit
+
+    // a power of a product: (x*y)^n = x^n * y^n, only for an int n
+    check_eval(cas, "(x*y)^2", "x ^ 2 * y ^ 2");
+    check_eval(cas, "(2*x)^3", "8 * x ^ 3"); // the coefficient's power folds
+    check_eval(cas, "(-x)^3", "-x ^ 3");
+    check_eval(cas, "(-y)^2", "y ^ 2"); // (-1)^2 folds to 1
+    check_eval(cas, "(x*y)^-1", "1 / (x * y)");
+    check_eval(cas, "(x*y)^a", "(x * y) ^ a"); // a may be 1/2, and sqrt(x*y) is not sqrt(x)*sqrt(y) for x, y < 0
+
+    // identities: expand(left - right) is 0 exactly when two polynomials are equal
+    check_eval(cas, "expand((x+y)^2 - (x^2 + 2*x*y + y^2))", "0");
+    check_eval(cas, "expand((a^2+b^2)*(c^2+d^2) - ((a*c-b*d)^2 + (a*d+b*c)^2))", "0"); // Brahmagupta-Fibonacci
+    check_eval(cas, "expand(a^4 + 4*b^4 - (a^2+2*b^2+2*a*b)*(a^2+2*b^2-2*a*b))", "0"); // Sophie Germain
+    check_eval(cas, "expand(a^3+b^3+c^3-3*a*b*c - (a+b+c)*(a^2+b^2+c^2-a*b-b*c-c*a))", "0"); // sum of cubes
+    check_eval(cas, "expand((a+b+c)^3 - 3*(a+b)*(b+c)*(c+a))", "a ^ 3 + b ^ 3 + c ^ 3");
+    check_eval(cas, "expand((x-1)*(x^4+x^3+x^2+x+1))", "x ^ 5 - 1"); // the geometric sum telescopes
+    check_eval(cas, "expand((x+y)^2 - (x-y)^2)", "4 * x * y");
+    // expand applies inside its parentheses only: the -1 in front of the second result is not distributed
+    check_eval(cas, "expand((x+y)^2) - expand((x-y)^2)", "2 * x * y + x ^ 2 + y ^ 2 - (x ^ 2 - 2 * x * y + y ^ 2)");
 
     // the numeric tower: floats absorb ints and rationals
     char *half = test_eval(cas, "float(1/2)");
