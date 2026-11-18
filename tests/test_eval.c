@@ -366,5 +366,20 @@ void run_eval_tests(void)
     check_eval(cas, "abs(3-10)", "7");
     check_eval(cas, "abs(-1/2)", "1/2");
 
+    // ans: set by every successful line, kept across scratch resets
+    check_eval(cas, "x^2 + 2*x", "2 * x + x ^ 2");
+    check_canonical(cas, "ans", "2 * x + x ^ 2");
+    check_eval(cas, "ans - 2*x", "x ^ 2");
+    check_eval(cas, "ans^(1/2)", "(x ^ 2) ^ (1/2)"); // stays: it's |x|, not x
+    check_eval(cas, "7/2", "7/2");
+    check_eval(cas, "1/0", "error: division by zero");
+    check_eval(cas, "ans * 2", "7"); // the failed line left ans alone
+    check_eval(cas, "ans + ans", "14");
+
+    cas_free(cas);
+
+    // ans before anything was evaluated
+    cas = test_new_cas(0);
+    check_eval(cas, "ans + 1", "error: ans has no value yet");
     cas_free(cas);
 }

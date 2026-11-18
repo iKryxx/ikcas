@@ -132,7 +132,7 @@ static cas_status_t parse_call(parser_t *p, token_t name, expr_t **out)
     return make_apply(p, span, fn, args, n, out);
 }
 
-/** Parses an identifier: a call, a registered constant, or a symbol. */
+/** Parses an identifier: a call, a registered constant, a bound name like `ans`, or a symbol. */
 static cas_status_t parse_ident(parser_t *p, expr_t **out)
 {
     token_t name = p->tok;
@@ -145,12 +145,19 @@ static cas_status_t parse_ident(parser_t *p, expr_t **out)
         return parse_call(p, name, out);
 
     const constant_def_t *c = registry_find_constant(p->cas, text, name.span.len);
+    const binding_t *b;
     if (c) {
         value_t v;
         p->cas->cur_span = name.span;
         if ((st = c->make(p->cas, &v)) != CAS_OK)
             return st;
         *out = expr_new_const(p->cas, name.span, v);
+    } else if ((b = binding_find(p->cas, text, name.span.len))) {
+        if (!b->value)
+            return cas_error_at(p->cas, name.span, CAS_ERR_UNBOUND, "%s has no value yet", b->name);
+        // Bring the stored heap tree into this line's scratch arena, so the
+        // passes only ever see scratch nodes.
+        *out = expr_clone_at(p->cas, b->value, name.span);
     } else {
         *out = expr_new_symbol(p->cas, name.span, text, name.span.len);
     }

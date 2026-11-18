@@ -1,6 +1,7 @@
 #ifndef CAS_H
 #define CAS_H
 
+#include "engine/bindings.h"
 #include "engine/diag.h"
 #include "engine/registry.h"
 #include "expr/expr.h"
@@ -48,6 +49,7 @@ struct cas {
     size_t plugins_cap;
     arena_t history_arena;
     arena_ring_t history; // fixed-size NUL-terminated lines, newest last
+    binding_table_t bindings; // values that outlive a line, like `ans`
 };
 
 /** What cas_eval produces for one line. */
@@ -64,7 +66,8 @@ void cas_free(cas_t *cas);
 
 /**
  * Parses and simplifies one line. Errors end up in cas->diags. The returned
- * expressions stay valid until the next cas_scratch_reset.
+ * expressions stay valid until the next cas_scratch_reset. On success the
+ * canonical result also becomes the new value of `ans`.
  */
 cas_status_t cas_eval(cas_t *cas, const char *src, size_t len, cas_result_t *out);
 

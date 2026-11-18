@@ -14,6 +14,8 @@
 #define DEFAULT_HISTORY_LINE_MAX 512
 #define DEFAULT_SIMPLIFY_MAX_ROUNDS 8
 
+#define ANS_NAME "ans"
+
 struct cas_defer_node {
     void (*fn)(void *);
     void *ptr;
@@ -58,7 +60,9 @@ cas_t *cas_new(const cas_options_t *opts)
         history_init(cas) != 0 ||
         registry_add_pass(cas, &pass_fold_constants) != CAS_OK ||
         registry_add_pass(cas, &pass_rewrite_expr) != CAS_OK ||
-        registry_add_pass(cas, &pass_collect_assoc) != CAS_OK) {
+        registry_add_pass(cas, &pass_collect_assoc) != CAS_OK ||
+        binding_declare(cas, ANS_NAME, BIND_READONLY) != CAS_OK) {
+        binding_table_destroy(&cas->bindings);
         registry_destroy(&cas->reg);
         arena_destroy(&cas->scratch);
         arena_destroy(&cas->history_arena);
@@ -74,6 +78,8 @@ void cas_free(cas_t *cas)
     if (!cas)
         return;
     cas_scratch_reset(cas);
+    // Values in bindings may need their type's destroy, which can live in a plugin.
+    binding_table_destroy(&cas->bindings);
 
     for (size_t i = cas->nplugins; i-- > 0;) {
         const plugin_desc_t *d = cas->plugins[i].desc;
@@ -179,5 +185,7 @@ cas_status_t cas_eval(cas_t *cas, const char *src, size_t len, cas_result_t *out
             cas_error(cas, CAS_ERR_INTERNAL, "simplification failed");
         return cas->diags.items[cas->diags.len - 1].status;
     }
-    return CAS_OK;
+    // The canonical form, not the display form, so `ans` feeds back into the
+    // passes exactly as the result came out of them.
+    return binding_set(cas, ANS_NAME, strlen(ANS_NAME), out->result);
 }

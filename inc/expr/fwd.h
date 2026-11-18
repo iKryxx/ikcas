@@ -18,6 +18,7 @@ typedef enum {
     CAS_ERR_DOMAIN,   // undefined in math, e.g. division by zero
     CAS_ERR_TYPE,     // operation doesn't exist for these operand types
     CAS_ERR_ARITY,    // wrong number of arguments
+    CAS_ERR_UNBOUND,  // a name that has no value yet, like `ans` on the first line
     CAS_ERR_REGISTRY, // duplicate or invalid registration
     CAS_ERR_PLUGIN,   // plugin failed to load or init
     CAS_ERR_NOMEM,

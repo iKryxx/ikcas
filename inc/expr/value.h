@@ -43,6 +43,8 @@ struct value_type {
     int rank; // promotion order, mixed operands go up to the higher rank
 
     void (*destroy)(value_t *v);
+    // The copy must own its memory (heap, not scratch): bindings like `ans`
+    // keep copies across cas_scratch_reset. cas is only for reporting errors.
     cas_status_t (*copy)(cas_t *cas, value_t *dst, const value_t *src);
     char *(*to_str)(const value_t *v); // malloc'd
     // Builds a value of this type from a lower-ranked one. NULL if not possible.

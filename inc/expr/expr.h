@@ -58,6 +58,22 @@ int expr_is_apply_of(const expr_t *e, const fn_def_t *fn);
 /** Deep copy of e. */
 expr_t *expr_clone(cas_t *cas, const expr_t *e);
 
+/**
+ * Deep copy of e into scratch with every node's span set to span. Used to
+ * bring a stored tree into a line, so errors point at the name that was used.
+ */
+expr_t *expr_clone_at(cas_t *cas, const expr_t *e, span_t span);
+
+/**
+ * Deep copy of e on the heap, independent of the scratch arena, so it
+ * survives cas_scratch_reset. Spans are zeroed because the line they point
+ * into is gone. Free it with expr_persist_free. Returns NULL on failure.
+ */
+expr_t *expr_persist(cas_t *cas, const expr_t *e);
+
+/** Frees a tree made by expr_persist. Accepts NULL. */
+void expr_persist_free(expr_t *e);
+
 /** Structural equality. Constants are compared by value. */
 int expr_equal(const expr_t *a, const expr_t *b);
 

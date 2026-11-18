@@ -1,7 +1,11 @@
 #include "expr/expr.h"
 #include "engine/cas.h"
+#include "engine/diag.h"
+#include "expr/fwd.h"
+#include "expr/value.h"
 
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 
 /** Allocates a zeroed node. */
@@ -104,6 +108,121 @@ expr_t *expr_clone(cas_t *cas, const expr_t *e)
     }
     }
     return NULL;
+}
+
+/**
+ * Deep-copies a tree into scratch, stamping span on every node.
+ * Example: the stored `ans` tree `x + 1` becomes scratch nodes that all point at "ans".
+ */
+expr_t *expr_clone_at(cas_t *cas, const expr_t *e, span_t span)
+{
+    switch (e->kind) {
+    case EXPR_CONST: {
+        value_t v;
+        if (value_copy(cas, &v, &e->as.value) != CAS_OK)
+            return NULL;
+        return expr_new_const(cas, span, v);
+    }
+    case EXPR_SYMBOL:
+        return expr_new_symbol(cas, span, e->as.sym.name, e->as.sym.len);
+    case EXPR_APPLY: {
+        size_t n = e->as.apply.nargs;
+        expr_t **args = cas_scratch_alloc(cas, (n ? n : 1) * sizeof(*args));
+        if (!args)
+            return NULL;
+        for (size_t i = 0; i < n; i++) {
+            if (!(args[i] = expr_clone_at(cas, e->as.apply.args[i], span)))
+                return NULL;
+        }
+        return expr_new_apply(cas, span, e->as.apply.fn, args, n);
+    }
+    }
+    return NULL;
+}
+
+/**
+ * Deep-copies a tree onto the heap so it outlives the scratch arena.
+ * Example: binding_set stores `ans` with expr_persist(cas, res.result).
+ */
+expr_t *expr_persist(cas_t *cas, const expr_t *e)
+{
+    expr_t *node = calloc(1, sizeof(*node));
+    if (!node) {
+        cas_error(cas, CAS_ERR_NOMEM, "out of memory");
+        return NULL;
+    }
+
+    node->kind = e->kind;
+    switch (e->kind) {
+    case EXPR_CONST: {
+        if (value_copy(cas, &node->as.value, &e->as.value) != CAS_OK)
+            goto fail;
+        return node;
+    }
+    case EXPR_SYMBOL: {
+        size_t len = e->as.sym.len;
+        char *copy = malloc(len + 1);
+        if (!copy) {
+            cas_error(cas, CAS_ERR_NOMEM, "out of memory");
+            goto fail;
+        }
+        memcpy(copy, e->as.sym.name, len);
+        copy[len] = '\0';
+        node->as.sym.name = copy;
+        node->as.sym.len = len;
+        return node;
+    }
+    case EXPR_APPLY: {
+        size_t n = e->as.apply.nargs;
+        expr_t **args = calloc(n ? n : 1, sizeof(*args));
+        if (!args) {
+            cas_error(cas, CAS_ERR_NOMEM, "out of memory");
+            goto fail;
+        }
+        node->as.apply.args = args;
+        node->as.apply.fn = e->as.apply.fn;
+        node->as.apply.nargs = e->as.apply.nargs;
+        for (size_t i = 0; i < n; i++) {
+            args[i] = expr_persist(cas, e->as.apply.args[i]);
+            if (!args[i]) {
+                // The node now owns finished children, so it needs the full
+                // free, which also frees the node itself (no goto fail).
+                node->as.apply.nargs = i;
+                expr_persist_free(node);
+                return NULL;
+            }
+        }
+        return node;
+    }
+    }
+fail:
+    // Only for a node that owns nothing yet. The error was already reported.
+    free(node);
+    return NULL;
+}
+
+/**
+ * Frees a heap tree from expr_persist, values and symbol names included.
+ * Example: binding_set frees the previous `ans` with it.
+ */
+void expr_persist_free(expr_t *e)
+{
+    if (!e)
+        return;
+    switch (e->kind) {
+    case EXPR_CONST:
+        value_destroy(&e->as.value);
+        break;
+    case EXPR_SYMBOL:
+        free((char *)e->as.sym.name);
+        break;
+    case EXPR_APPLY:
+        for (size_t i = 0; i < e->as.apply.nargs; i++)
+            expr_persist_free(e->as.apply.args[i]);
+        free(e->as.apply.args);
+        break;
+    }
+    free(e);
 }
 
 /** Structural equality. */

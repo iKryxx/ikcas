@@ -1,0 +1,15 @@
+error: ans has no value yet
+  ans
+  ^^^
+eval: 5
+eval: 10
+eval: 10
+error: division by zero
+  1/0
+  ^^^
+eval: 10
+eval: 1 + x
+eval: x ^ 2
+eval: x ^ 2
+eval: 3.14159265358979323846264338327950288419
+eval: 3.14159265358979323846264338327950288419
